@@ -21,6 +21,7 @@ message ManagementEvent {
     DtnQueueDepthChanged dtn_queue_depth_changed = 4;
     HubStatusChanged hub_status_changed = 5;
     InternetFallbackChanged internet_fallback_changed = 6;
+    AppPresenceChanged app_presence_changed = 7;
   }
 }
 
@@ -47,4 +48,10 @@ message DtnQueueDepthChanged {
 
 message InternetFallbackChanged {
   bool enabled = 1;
+}
+
+message AppPresenceChanged {
+  bytes node_id = 1;
+  string app_id = 2;
+  string app_version = 3;
 }

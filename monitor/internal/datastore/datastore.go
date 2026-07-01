@@ -7,6 +7,7 @@
 //   0.0.9 - Trust score breakdown per mesh node.
 //   0.0.10 - Orphan direction hints for stale nodes on the Node Map.
 //   0.0.11 - Hop latency history and internet-fallback config for Monitor.
+//   0.0.12 - App Stats from app_presence table.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -22,6 +23,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/JohnDovey/QuakeMesh/core/apppresence"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/location"
 	"github.com/JohnDovey/QuakeMesh/core/metrics"
@@ -125,6 +127,15 @@ type OrphanHint struct {
 	AgeLabel      string    `json:"age_label"`
 	Source        string    `json:"source"`
 	ProximityNote string    `json:"proximity_note,omitempty"`
+}
+
+// AppStat is an aggregated app_id@version row for the App Stats view.
+type AppStat struct {
+	AppID      string    `json:"app_id"`
+	AppVersion string    `json:"app_version"`
+	NodeCount  int       `json:"node_count"`
+	FirstSeen  time.Time `json:"first_seen"`
+	LastSeen   time.Time `json:"last_seen"`
 }
 
 // Nodes returns mesh nodes, excluding backbone hubs in hub_registry.
@@ -545,4 +556,23 @@ func (s *Store) HopLatency(window time.Duration, limit int) ([]HopLatencyPoint, 
 		points = append(points, pt)
 	}
 	return points, nil
+}
+
+// AppStats returns aggregated third-party app presence across the network.
+func (s *Store) AppStats() ([]AppStat, error) {
+	stats, err := apppresence.NewStore(s.db).AppStats()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AppStat, 0, len(stats))
+	for _, st := range stats {
+		out = append(out, AppStat{
+			AppID:      st.AppID,
+			AppVersion: st.AppVersion,
+			NodeCount:  st.NodeCount,
+			FirstSeen:  st.FirstSeen,
+			LastSeen:   st.LastSeen,
+		})
+	}
+	return out, nil
 }

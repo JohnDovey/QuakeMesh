@@ -6,6 +6,7 @@
 //   0.0.7 - /api/hubs and hub counts in overview snapshot.
 //   0.0.9 - /api/trust-scores for Phase 7 trust register view.
 //   0.0.11 - /api/metrics/hop-latency and /api/internet-fallback.
+//   0.0.12 - /api/app-stats for Phase 10 App Stats view.
 
 package server
 
@@ -76,6 +77,7 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/relay-hubs/", s.requireAuth(s.handleRelayHubAction))
 	mux.HandleFunc("/api/metrics/hop-latency", s.requireAuth(s.handleHopLatency))
 	mux.HandleFunc("/api/internet-fallback", s.requireAuth(s.handleInternetFallback))
+	mux.HandleFunc("/api/app-stats", s.requireAuth(s.handleAppStats))
 	mux.HandleFunc("/ws", s.requireAuthWS(s.handleBrowserWS))
 	mux.Handle("/", s.handleStatic())
 
@@ -369,6 +371,19 @@ func (s *Server) handleRelayHubAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.NotFound(w, r)
+}
+
+func (s *Server) handleAppStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	stats, err := s.cfg.Data.AppStats()
+	if err != nil {
+		http.Error(w, "app stats query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, stats)
 }
 
 func (s *Server) handleHopLatency(w http.ResponseWriter, r *http.Request) {

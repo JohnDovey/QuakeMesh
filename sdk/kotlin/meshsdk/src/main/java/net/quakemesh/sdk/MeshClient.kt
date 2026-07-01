@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.1 - Initial scaffold.
+//   0.0.12 - Phase 10: HttpMeshClient implements MeshClient.
 
 package net.quakemesh.sdk
 
@@ -10,7 +11,7 @@ package net.quakemesh.sdk
  * Android) so third-party apps can use the mesh purely as a transport.
  * See "Application SDK and Transport-as-a-Service" in /plan.md.
  *
- * Not yet implemented (Phase 10). Mirrors [/sdk/go's Client] interface.
+ * [HttpMeshClient] connects to the loopback mesh-sdk daemon.
  */
 data class Session(
     val appId: String,

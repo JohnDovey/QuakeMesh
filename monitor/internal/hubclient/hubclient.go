@@ -36,6 +36,8 @@ type Event struct {
 	HopCount        uint32  `json:"hop_count,omitempty"`
 	DTNDepth        uint32  `json:"dtn_depth,omitempty"`
 	Enabled         bool    `json:"enabled,omitempty"`
+	AppID           string  `json:"app_id,omitempty"`
+	AppVersion      string  `json:"app_version,omitempty"`
 }
 
 // Client subscribes to QuakeMeshHub's loopback /ws management stream.
@@ -182,6 +184,14 @@ func translateEvent(mgmt *wire.ManagementEvent) (Event, bool) {
 			Type:            "internet_fallback_changed",
 			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
 			Enabled:         e.InternetFallbackChanged.Enabled,
+		}, true
+	case *wire.ManagementEvent_AppPresenceChanged:
+		return Event{
+			Type:            "app_presence_changed",
+			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
+			NodeID:          nodeIDString(e.AppPresenceChanged.NodeId),
+			AppID:           e.AppPresenceChanged.AppId,
+			AppVersion:      e.AppPresenceChanged.AppVersion,
 		}, true
 	default:
 		return base, false

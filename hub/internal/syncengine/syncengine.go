@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/JohnDovey/QuakeMesh/core/apppresence"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/wire"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
@@ -28,6 +29,7 @@ type Config struct {
 	Peers    []string
 	Interval time.Duration
 	Registry *registry.Registry
+	Apps     *apppresence.Store
 }
 
 // Engine gossips registry state to peer hubs.
@@ -148,6 +150,21 @@ func (e *Engine) buildMessage() (*wire.HubSyncMessage, error) {
 			LastVerifiedUnixMs: rh.LastVerified.UnixMilli(),
 		})
 	}
+	if e.cfg.Apps != nil {
+		apps, err := e.cfg.Apps.List()
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range apps {
+			msg.AppPresence = append(msg.AppPresence, &wire.AppPresenceRecord{
+				NodeId:             a.NodeID[:],
+				AppId:              a.AppID,
+				AppName:            a.AppName,
+				AppVersion:         a.AppVersion,
+				LastReportedUnixMs: a.LastReported.UnixMilli(),
+			})
+		}
+	}
 	return msg, nil
 }
 
@@ -215,6 +232,21 @@ func (e *Engine) apply(msg *wire.HubSyncMessage) {
 			id, rh.Ip, int(rh.Port), time.UnixMilli(rh.LastVerifiedUnixMs),
 		); err != nil {
 			log.Printf("syncengine: merge relay: %v", err)
+		}
+	}
+	if e.cfg.Apps != nil {
+		for _, ap := range msg.AppPresence {
+			if len(ap.NodeId) != len(identity.NodeID{}) || ap.AppId == "" {
+				continue
+			}
+			var id identity.NodeID
+			copy(id[:], ap.NodeId)
+			if _, err := e.cfg.Apps.MergeGossip(
+				id, ap.AppId, ap.AppName, ap.AppVersion,
+				time.UnixMilli(ap.LastReportedUnixMs),
+			); err != nil {
+				log.Printf("syncengine: merge app presence: %v", err)
+			}
 		}
 	}
 }

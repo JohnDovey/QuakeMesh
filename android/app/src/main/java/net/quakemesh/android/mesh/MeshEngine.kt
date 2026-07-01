@@ -26,6 +26,7 @@ object MeshEngine {
         val n = MeshNodeFactory.open(context)
         node = n
         locationReporter = LocationReporter(context.applicationContext).also { it.start() }
+        MeshLocalApi.start(n.nodeId)
         if (n is StubMeshNode) {
             n.setOutboundHandler { peer, frame ->
                 transports.forEach { it.send(peer, frame) }
@@ -42,6 +43,7 @@ object MeshEngine {
     }
 
     fun stop() {
+        MeshLocalApi.stop()
         locationReporter?.stop()
         locationReporter = null
         transports.forEach { it.stop() }

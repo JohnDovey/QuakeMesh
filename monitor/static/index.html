@@ -19,6 +19,7 @@
       <a href="#map" data-view="map">Node Map</a>
       <a href="#trust" data-view="trust">Trust Scores</a>
       <a href="#hop-timing" data-view="hop-timing">Hop Timing</a>
+      <a href="#apps" data-view="apps">App Stats</a>
       <a href="#relay" data-view="relay">Relay Hubs</a>
       <a href="#" id="logout">Logout</a>
     </nav>
@@ -138,6 +139,19 @@
         <h2>Hop Timing</h2>
         <p>Route latency samples recorded when the hub updates routing_table entries (last hour).</p>
         <canvas id="hop-latency-chart" height="120"></canvas>
+      </div>
+    </section>
+
+    <section id="view-apps" class="hidden">
+      <div class="panel">
+        <h2>App Stats</h2>
+        <p>Third-party apps active across the network (<code>app_id@version</code>).</p>
+        <table>
+          <thead>
+            <tr><th>App ID</th><th>Version</th><th>Nodes</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
+          </thead>
+          <tbody id="app-stats-table"></tbody>
+        </table>
       </div>
     </section>
 

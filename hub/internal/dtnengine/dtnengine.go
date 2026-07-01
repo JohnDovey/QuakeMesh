@@ -26,11 +26,19 @@ type DepthNotifier interface {
 	DtnQueueDepthChanged(depth int)
 }
 
+// LocalDeliverer receives bundles addressed to the local node.
+type LocalDeliverer interface {
+	DeliverLocal(src, dst identity.NodeID, payload []byte) error
+}
+
 // Config configures an Engine.
 type Config struct {
 	Store    *dtn.Store
 	Registry *registry.Registry
 	Handler  DepthNotifier
+	SelfID   identity.NodeID
+	// LocalDeliverer receives bundles addressed to SelfID.
+	LocalDeliverer LocalDeliverer
 	// TTL is the default lifetime for newly enqueued bundles.
 	TTL time.Duration
 	// Interval is how often to sweep expiry and attempt delivery.
@@ -73,6 +81,11 @@ func (e *Engine) Close() {
 		e.cancel()
 	}
 	e.wg.Wait()
+}
+
+// SetLocalDeliverer wires delivery of bundles addressed to SelfID.
+func (e *Engine) SetLocalDeliverer(d LocalDeliverer) {
+	e.cfg.LocalDeliverer = d
 }
 
 // Enqueue stores a bundle for later delivery to dst.
@@ -131,6 +144,15 @@ func (e *Engine) deliverPending() {
 		if _, hasRoute, err := e.cfg.Registry.GetRoute(dst); err != nil || !hasRoute {
 			_ = e.cfg.Store.IncrementRetry(b.BundleID)
 			continue
+		}
+		var src identity.NodeID
+		copy(src[:], b.SrcNodeID[:])
+		if dst == e.cfg.SelfID && e.cfg.LocalDeliverer != nil {
+			if err := e.cfg.LocalDeliverer.DeliverLocal(src, dst, b.Payload); err != nil {
+				log.Printf("dtnengine: local deliver: %v", err)
+				_ = e.cfg.Store.IncrementRetry(b.BundleID)
+				continue
+			}
 		}
 		if err := e.cfg.Store.Delete(b.BundleID); err != nil {
 			log.Printf("dtnengine: delete bundle: %v", err)

@@ -7,7 +7,7 @@ directly. See "Application SDK and Transport-as-a-Service" in
 
 | Path | What | Status |
 |---|---|---|
-| [/sdk/go](go) | Go module (CLI/server integrations) | scaffold, builds |
-| [/sdk/kotlin](kotlin) | Kotlin AAR (`:meshsdk`, for Android apps) | scaffold |
+| [/sdk/go](go) | Go module (CLI/server integrations) | Phase 10 HTTP client |
+| [/sdk/kotlin](kotlin) | Kotlin AAR (`:meshsdk`, for Android apps) | Phase 10 HttpMeshClient |
 
-Not yet implemented — scaffold only (Phase 10 in [/plan.md](../plan.md)).
+Implemented in Phase 10: local JSON HTTP API on Hub Unix socket (`unix:/tmp/quakemeshhub.sock`) and Android loopback port `18084`.

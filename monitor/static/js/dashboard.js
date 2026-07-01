@@ -500,6 +500,25 @@ document.getElementById('fallback-toggle')?.addEventListener('change', async (e)
   }
 });
 
+async function loadAppStats() {
+  const stats = await api('/api/app-stats') || [];
+  const tbody = document.getElementById('app-stats-table');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!stats.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="5">No registered apps yet.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const s of stats) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.app_id}</td><td>${s.app_version}</td><td>${s.node_count}</td>
+      <td>${formatDateTime(s.first_seen)}</td><td>${formatDateTime(s.last_seen)}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
 async function loadOverview() {
   const o = await api('/api/overview');
   if (o) applyOverview(o);
@@ -572,6 +591,15 @@ connectWS((ev) => {
     loadHubs();
     loadHopLatency();
   }
+  if (ev.type === 'dtn_queue_depth_changed') {
+    document.getElementById('stat-dtn').textContent = ev.dtn_depth;
+  }
+  if (ev.type === 'internet_fallback_changed') {
+    setFallbackUI(!!ev.enabled);
+  }
+  if (ev.type === 'app_presence_changed') {
+    loadAppStats();
+  }
 });
 
 (async function init() {
@@ -584,6 +612,7 @@ connectWS((ev) => {
     await loadRoutes();
     await loadRelayHubs();
     await loadInternetFallback();
+    await loadAppStats();
   } catch (_) {
     window.location.href = '/login';
   }

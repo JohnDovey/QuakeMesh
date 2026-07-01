@@ -39,6 +39,7 @@ func main() {
 	flag.DurationVar(&cfg.OGMInterval, "ogm-interval", cfg.OGMInterval, "how often to broadcast an OGM to configured peers")
 	flag.DurationVar(&cfg.StaleAfter, "stale-after", cfg.StaleAfter, "mark a peer stale after this long without a received OGM")
 	flag.DurationVar(&cfg.DTNTTL, "dtn-ttl", cfg.DTNTTL, "default TTL for queued DTN bundles")
+	flag.StringVar(&cfg.AppSocket, "app-socket", cfg.AppSocket, "mesh-sdk daemon listen address (unix:/path or tcp:host:port; empty disables)")
 	flag.Parse()
 
 	if peers != "" {
@@ -62,6 +63,9 @@ func main() {
 	}
 	fmt.Printf("OGM engine listening on %s (peers: %v)\n", cfg.OGMBindAddr, cfg.Peers)
 	fmt.Printf("management API listening on %s\n", cfg.ManagementAddr)
+	if cfg.AppSocket != "" {
+		fmt.Printf("app SDK daemon listening on %s\n", cfg.AppSocket)
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

@@ -215,3 +215,17 @@ func (s *Server) InternetFallbackChanged(enabled bool) {
 		},
 	})
 }
+
+// AppPresenceChanged implements daemonapi.PresenceNotifier.
+func (s *Server) AppPresenceChanged(nodeID identity.NodeID, appID, appVersion string) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_AppPresenceChanged{
+			AppPresenceChanged: &wire.AppPresenceChanged{
+				NodeId:      nodeID[:],
+				AppId:       appID,
+				AppVersion:  appVersion,
+			},
+		},
+	})
+}

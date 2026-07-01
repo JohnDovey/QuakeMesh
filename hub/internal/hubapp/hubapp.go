@@ -5,6 +5,7 @@
 //           engine + management API wired into one runnable Hub.
 //   0.0.7 - Phase 6: DTN store-and-forward engine wired into hub lifecycle.
 //   0.0.11 - Phase 9: gossip sync, metrics, internet-fallback watcher.
+//   0.0.12 - Phase 10: local app SDK daemon API on Unix socket.
 
 // Package hubapp wires identity, the SQLite registry, the OGM engine,
 // the DTN engine, gossip sync, and the loopback management API into a
@@ -18,12 +19,14 @@ import (
 	"net"
 	"time"
 
+	"github.com/JohnDovey/QuakeMesh/core/apppresence"
 	"github.com/JohnDovey/QuakeMesh/core/dtn"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/metrics"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
 	"github.com/JohnDovey/QuakeMesh/core/trust"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/configstore"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/daemonapi"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/dtnengine"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/fallback"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/managementapi"
@@ -62,6 +65,9 @@ type Config struct {
 	DTNInterval time.Duration
 	// SyncInterval is how often to gossip HubSyncMessage to peers.
 	SyncInterval time.Duration
+	// AppSocket is the mesh-sdk daemon listen address (unix: or tcp:).
+	// Empty disables the local app API.
+	AppSocket string
 }
 
 // DefaultConfig returns sensible defaults for the tuning parameters.
@@ -75,6 +81,7 @@ func DefaultConfig() Config {
 		DTNTTL:      24 * time.Hour,
 		DTNInterval: 5 * time.Second,
 		SyncInterval: 30 * time.Second,
+		AppSocket:    "unix:/tmp/quakemeshhub.sock",
 	}
 }
 
@@ -90,6 +97,7 @@ type Hub struct {
 	Sync     *syncengine.Engine
 	Fallback *fallback.Engine
 	API      *managementapi.Server
+	Daemon   *daemonapi.Server
 }
 
 // New loads or creates this hub's identity, opens (and migrates) its
@@ -110,15 +118,28 @@ func New(cfg Config) (*Hub, error) {
 	api := managementapi.New(cfg.ManagementAddr)
 	cfgStore := configstore.New(db)
 	metricsStore := metrics.NewStore(db)
+	appStore := apppresence.NewStore(db)
 	dtnStore := dtn.NewStore(db)
 	trustStore := trust.NewStore(db)
 	dtnEng := dtnengine.New(dtnengine.Config{
 		Store:    dtnStore,
 		Registry: reg,
 		Handler:  api,
+		SelfID:   id.NodeID,
 		TTL:      cfg.DTNTTL,
 		Interval: cfg.DTNInterval,
 	})
+	var daemon *daemonapi.Server
+	if cfg.AppSocket != "" {
+		daemon = daemonapi.New(daemonapi.Config{
+			SelfID:     id.NodeID,
+			ListenAddr: cfg.AppSocket,
+			Apps:       appStore,
+			Sender:     dtnEng,
+			Notifier:   api,
+		})
+		dtnEng.SetLocalDeliverer(daemon)
+	}
 	fallbackEng := fallback.New(cfgStore, api)
 	events := &eventBridge{api: api, dtn: dtnEng}
 	syncBind, err := syncengine.SyncBindAddr(cfg.OGMBindAddr)
@@ -131,6 +152,7 @@ func New(cfg Config) (*Hub, error) {
 		Peers:    syncengine.PeerSyncAddrs(cfg.Peers),
 		Interval: cfg.SyncInterval,
 		Registry: reg,
+		Apps:     appStore,
 	})
 	ogm := ogmengine.New(ogmengine.Config{
 		SelfID:     id.NodeID,
@@ -147,7 +169,7 @@ func New(cfg Config) (*Hub, error) {
 
 	return &Hub{
 		cfg: cfg, Identity: id, DB: db, Registry: reg,
-		OGM: ogm, DTN: dtnEng, Sync: syncEng, Fallback: fallbackEng, API: api,
+		OGM: ogm, DTN: dtnEng, Sync: syncEng, Fallback: fallbackEng, API: api, Daemon: daemon,
 	}, nil
 }
 
@@ -157,11 +179,20 @@ func (h *Hub) Start() error {
 	if err := h.API.Start(); err != nil {
 		return fmt.Errorf("hubapp: start management API: %w", err)
 	}
+	if h.Daemon != nil {
+		if err := h.Daemon.Start(); err != nil {
+			h.API.Close()
+			return fmt.Errorf("hubapp: start app daemon: %w", err)
+		}
+	}
 	h.DTN.Start()
 	h.Fallback.Start()
 	if err := h.Sync.Start(); err != nil {
 		h.Fallback.Close()
 		h.DTN.Close()
+		if h.Daemon != nil {
+			h.Daemon.Close()
+		}
 		h.API.Close()
 		return fmt.Errorf("hubapp: start sync engine: %w", err)
 	}
@@ -169,6 +200,9 @@ func (h *Hub) Start() error {
 		h.Sync.Close()
 		h.Fallback.Close()
 		h.DTN.Close()
+		if h.Daemon != nil {
+			h.Daemon.Close()
+		}
 		h.API.Close()
 		return fmt.Errorf("hubapp: start OGM engine: %w", err)
 	}
@@ -198,7 +232,11 @@ func (h *Hub) registerSelfHub() error {
 func (h *Hub) Close() error {
 	h.Fallback.Close()
 	h.DTN.Close()
-	return errors.Join(h.Sync.Close(), h.OGM.Close(), h.API.Close(), h.DB.Close())
+	var daemonErr error
+	if h.Daemon != nil {
+		daemonErr = h.Daemon.Close()
+	}
+	return errors.Join(h.Sync.Close(), h.OGM.Close(), daemonErr, h.API.Close(), h.DB.Close())
 }
 
 type eventBridge struct {

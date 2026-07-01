@@ -2,13 +2,12 @@
 //
 // Changelog:
 //   0.0.1 - Initial scaffold.
+//   0.0.12 - Phase 10: HTTPClient implements Client against local daemon.
 
 // Package sdk wraps the local IPC API (Unix domain socket on Hub, bound
 // service / loopback gRPC on Android) so third-party CLI/server apps can
 // use the mesh purely as a transport. See "Application SDK and
 // Transport-as-a-Service" in /plan.md.
-//
-// Not yet implemented (Phase 10). This is a scaffold placeholder.
 package sdk
 
 // Session is returned by Register and threaded through subsequent calls.
