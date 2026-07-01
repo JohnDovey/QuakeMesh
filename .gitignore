@@ -21,6 +21,7 @@ captures/
 *.apk
 *.aab
 *.aar
+android/app/libs/meshcore-sources.jar
 
 # General
 *.log
