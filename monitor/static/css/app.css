@@ -54,6 +54,10 @@ th { color: #9da7b3; font-weight: 600; }
 .status-online { color: #3fb950; }
 .status-stale { color: #d29922; }
 .kind-hub { color: #6cb6ff; }
+.trust-red { color: #da3633; }
+.trust-amber { color: #d29922; }
+.trust-green { color: #3fb950; }
+.trust-blue { color: #6cb6ff; }
 #map { height: 420px; border-radius: 8px; }
 .auth-card {
   max-width: 380px;

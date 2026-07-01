@@ -9,9 +9,10 @@
 //   0.0.6 - Phase 5: Network Graph and Routes dashboard views.
 //   0.0.7 - Phase 6: live DTN queue depth (non-expired bundles only).
 //   0.0.8 - Backbone hub tracking: /api/hubs, overview hub counts.
+//   0.0.9 - Phase 7: Trust Scores view and trust-coloured map markers.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.8"
+const Version = "0.0.9"

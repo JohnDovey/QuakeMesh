@@ -3,6 +3,7 @@ let markers = {};
 let nodes = [];
 let hubs = [];
 let hubIds = new Set();
+let trustByNode = {};
 let routes = [];
 let graphNetwork = null;
 
@@ -39,6 +40,22 @@ function hubEndpoint(h) {
   return '—';
 }
 
+function trustColor(score) {
+  const s = score ?? 0;
+  if (s >= 76) return '#6cb6ff';
+  if (s >= 51) return '#3fb950';
+  if (s >= 26) return '#d29922';
+  return '#da3633';
+}
+
+function trustClass(score) {
+  const s = score ?? 0;
+  if (s >= 76) return 'trust-blue';
+  if (s >= 51) return 'trust-green';
+  if (s >= 26) return 'trust-amber';
+  return 'trust-red';
+}
+
 function renderHubsTable(tbodyId, detailed) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -69,8 +86,10 @@ function renderNodesTable() {
   for (const n of nodes) {
     const tr = document.createElement('tr');
     const cls = n.status === 'online' ? 'status-online' : 'status-stale';
+    const score = trustByNode[n.node_id]?.total;
+    const trustLabel = score != null ? ` · trust ${score}` : '';
     tr.innerHTML = `<td title="${n.node_id}">${shortId(n.node_id)}</td>
-      <td class="${cls}">${n.status}</td>
+      <td class="${cls}">${n.status}${trustLabel}</td>
       <td>${new Date(n.last_seen).toLocaleString()}</td>`;
     tbody.appendChild(tr);
   }
@@ -95,17 +114,25 @@ function refreshMapMarkers() {
   noGps.innerHTML = '';
   const withGps = [];
   for (const n of nodes) {
+    const score = trustByNode[n.node_id]?.total ?? 0;
     if (n.lat != null && n.lon != null) {
       withGps.push(n);
       if (!markers[n.node_id]) {
-        markers[n.node_id] = L.marker([n.lat, n.lon]).addTo(map)
-          .bindPopup(`<strong>${shortId(n.node_id)}</strong><br>${n.status}`);
+        markers[n.node_id] = L.circleMarker([n.lat, n.lon], {
+          radius: 9,
+          fillColor: trustColor(score),
+          color: '#e7ecf1',
+          weight: 1,
+          fillOpacity: 0.85,
+        }).addTo(map)
+          .bindPopup(`<strong>${shortId(n.node_id)}</strong><br>${n.status}<br>Trust: ${score}`);
       } else {
         markers[n.node_id].setLatLng([n.lat, n.lon]);
+        markers[n.node_id].setStyle({ fillColor: trustColor(score) });
       }
     } else {
       const li = document.createElement('li');
-      li.textContent = `${shortId(n.node_id)} — ${n.status}`;
+      li.innerHTML = `${shortId(n.node_id)} — ${n.status} — <span class="${trustClass(score)}">trust ${score}</span>`;
       noGps.appendChild(li);
     }
   }
@@ -128,6 +155,37 @@ async function loadHubs() {
   renderHubsTable('hubs-table-overview', false);
   renderHubsTable('hubs-table', true);
   refreshGraph();
+}
+
+async function loadTrustScores() {
+  const scores = await api('/api/trust-scores') || [];
+  trustByNode = {};
+  for (const s of scores) {
+    trustByNode[s.node_id] = s;
+  }
+  renderTrustTable();
+  renderNodesTable();
+  refreshMapMarkers();
+}
+
+function renderTrustTable() {
+  const tbody = document.getElementById('trust-table');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const rows = Object.values(trustByNode).sort((a, b) => (b.total ?? 0) - (a.total ?? 0));
+  for (const s of rows) {
+    const tr = document.createElement('tr');
+    const cls = s.status === 'online' ? 'status-online' : 'status-stale';
+    tr.innerHTML = `<td title="${s.node_id}">${shortId(s.node_id)}</td>
+      <td class="${cls}">${s.status}</td>
+      <td class="${trustClass(s.total)}">${s.total}</td>
+      <td>${s.longevity}</td>
+      <td>${s.proximity}</td>
+      <td>${s.endorsements}</td>
+      <td>${s.proximity_events}</td>
+      <td>${s.endorsement_count}</td>`;
+    tbody.appendChild(tr);
+  }
 }
 
 async function loadRoutes() {
@@ -181,11 +239,12 @@ function refreshGraph() {
     });
   }
   for (const n of nodes) {
+    const score = trustByNode[n.node_id]?.total ?? 0;
     nodeMap.set(n.node_id, {
       id: n.node_id,
       label: shortId(n.node_id),
-      color: n.status === 'online' ? '#238636' : '#8b6914',
-      title: `node · ${n.status}`,
+      color: trustColor(score),
+      title: `node · ${n.status} · trust ${score}`,
     });
   }
   for (const r of routes) {
@@ -274,6 +333,7 @@ connectWS((ev) => {
   }
   if (ev.type === 'node_status_changed') {
     loadNodes();
+    loadTrustScores();
     loadOverview();
   }
   if (ev.type === 'hub_status_changed') {
@@ -294,6 +354,7 @@ connectWS((ev) => {
     await loadOverview();
     await loadHubs();
     await loadNodes();
+    await loadTrustScores();
     await loadRoutes();
     await loadRelayHubs();
   } catch (_) {

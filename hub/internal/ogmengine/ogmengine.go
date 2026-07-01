@@ -8,6 +8,7 @@
 //           next-hops.
 //   0.0.7 - Phase 6: stale-node probing, revival "I'm up" rebroadcast.
 //   0.0.7 - Register direct peer hubs in hub_registry; hub stale sweep.
+//   0.0.9 - Record hub-observed proximity events for trust scoring.
 
 // Package ogmengine sends and receives OGMs (Originator Messages) over
 // UDP, maintaining node_registry/routing_table entries for reachable
@@ -28,6 +29,7 @@ import (
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/routing"
+	"github.com/JohnDovey/QuakeMesh/core/trust"
 	"github.com/JohnDovey/QuakeMesh/core/wire"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
@@ -51,6 +53,7 @@ type Config struct {
 	StaleAfter time.Duration
 	TTL        uint32
 	Registry   *registry.Registry
+	Trust      *trust.Store
 	Handler    EventHandler
 }
 
@@ -298,6 +301,8 @@ func (e *Engine) handleOgm(msg *wire.Ogm, raddr *net.UDPAddr) {
 		e.cfg.Handler.NodeStatusChanged(originID, registry.NodeStatusOnline)
 		e.rebroadcastStartup(msg, addrKey)
 	}
+
+	e.recordProximity(originID, msg.HopCount)
 
 	hopCount := int(msg.HopCount) + 1
 	linkTQ := e.linkTQ(forwarder)
@@ -547,6 +552,21 @@ func (e *Engine) upsertPeerHub(hubID identity.NodeID, raddr *net.UDPAddr) {
 	}
 	if changed && e.cfg.Handler != nil {
 		e.cfg.Handler.HubStatusChanged(hubID, registry.HubStatusOnline)
+	}
+}
+
+func (e *Engine) recordProximity(observed identity.NodeID, hopCount uint32) {
+	if e.cfg.Trust == nil {
+		return
+	}
+	transport := trust.TransportHubRelay
+	rssi := -80
+	if hopCount == 0 {
+		transport = trust.TransportHubDirect
+		rssi = -55
+	}
+	if err := e.cfg.Trust.RecordProximity(e.cfg.SelfID, observed, rssi, transport, time.Now()); err != nil {
+		log.Printf("ogmengine: RecordProximity: %v", err)
 	}
 }
 

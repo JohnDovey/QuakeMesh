@@ -4,6 +4,7 @@
 //   0.0.4 - Phase 3: HTTP server, REST API, browser /ws push, and
 //           embedded static dashboard assets.
 //   0.0.7 - /api/hubs and hub counts in overview snapshot.
+//   0.0.9 - /api/trust-scores for Phase 7 trust register view.
 
 package server
 
@@ -68,6 +69,7 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/nodes", s.requireAuth(s.handleNodes))
 	mux.HandleFunc("/api/hubs", s.requireAuth(s.handleHubs))
 	mux.HandleFunc("/api/routes", s.requireAuth(s.handleRoutes))
+	mux.HandleFunc("/api/trust-scores", s.requireAuth(s.handleTrustScores))
 	mux.HandleFunc("/api/relay-hubs", s.requireAuth(s.handleRelayHubs))
 	mux.HandleFunc("/api/relay-hubs/", s.requireAuth(s.handleRelayHubAction))
 	mux.HandleFunc("/ws", s.requireAuthWS(s.handleBrowserWS))
@@ -262,6 +264,19 @@ func (s *Server) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, routes)
+}
+
+func (s *Server) handleTrustScores(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	scores, err := s.cfg.Data.TrustScores()
+	if err != nil {
+		http.Error(w, "trust scores query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, scores)
 }
 
 func (s *Server) handleRelayHubs(w http.ResponseWriter, r *http.Request) {

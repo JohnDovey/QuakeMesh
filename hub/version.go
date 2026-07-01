@@ -10,9 +10,10 @@
 //   0.0.6 - Phase 5: multi-hop OGM rebroadcast, route metric, failover.
 //   0.0.7 - Phase 6: DTN store-and-forward queue.
 //   0.0.8 - hub_registry liveness; HubStatusChanged management events.
+//   0.0.9 - Phase 7: hub-observed proximity events for trust scoring.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.8"
+const Version = "0.0.9"

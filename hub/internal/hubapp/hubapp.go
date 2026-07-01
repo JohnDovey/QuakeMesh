@@ -19,6 +19,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/core/dtn"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
+	"github.com/JohnDovey/QuakeMesh/core/trust"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/dtnengine"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/managementapi"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/ogmengine"
@@ -97,6 +98,7 @@ func New(cfg Config) (*Hub, error) {
 	reg := registry.New(db)
 	api := managementapi.New(cfg.ManagementAddr)
 	dtnStore := dtn.NewStore(db)
+	trustStore := trust.NewStore(db)
 	dtnEng := dtnengine.New(dtnengine.Config{
 		Store:    dtnStore,
 		Registry: reg,
@@ -113,6 +115,7 @@ func New(cfg Config) (*Hub, error) {
 		StaleAfter: cfg.StaleAfter,
 		TTL:        cfg.OGMTTL,
 		Registry:   reg,
+		Trust:      trustStore,
 		Handler:    events,
 	})
 

@@ -4,6 +4,7 @@
 //   0.0.4 - Phase 3: read-only registry queries plus relay_hubs CRUD
 //           for the Monitor dashboard.
 //   0.0.7 - hub_registry queries; nodes exclude backbone hubs.
+//   0.0.9 - Trust score breakdown per mesh node.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -13,11 +14,13 @@ package datastore
 import (
 	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
+	"github.com/JohnDovey/QuakeMesh/core/trust"
 )
 
 // Store reads and writes Monitor-relevant tables in quakemeshhub.db.
@@ -79,6 +82,18 @@ type Overview struct {
 	OfflineHubs   int `json:"offline_hubs"`
 	RouteCount    int `json:"route_count"`
 	DTNDepth      int `json:"dtn_depth"`
+}
+
+// TrustScore is a per-node trust breakdown for the dashboard.
+type TrustScore struct {
+	NodeID            string `json:"node_id"`
+	Status            string `json:"status"`
+	Longevity         int    `json:"longevity"`
+	Proximity         int    `json:"proximity"`
+	Endorsements      int    `json:"endorsements"`
+	Total             int    `json:"total"`
+	ProximityEvents   int    `json:"proximity_events"`
+	EndorsementCount  int    `json:"endorsement_count"`
 }
 
 // Nodes returns mesh nodes, excluding backbone hubs in hub_registry.
@@ -231,6 +246,48 @@ func (s *Store) OverviewSnapshot() (Overview, error) {
 		return o, err
 	}
 	return o, nil
+}
+
+// TrustScores returns trust breakdowns for every mesh node.
+func (s *Store) TrustScores() ([]TrustScore, error) {
+	nodes, err := s.Nodes()
+	if err != nil {
+		return nil, err
+	}
+	trustStore := trust.NewStore(s.db)
+	now := time.Now()
+	scores := make([]TrustScore, 0, len(nodes))
+	for _, n := range nodes {
+		idBytes, err := hex.DecodeString(n.NodeID)
+		if err != nil || len(idBytes) != len(identity.NodeID{}) {
+			continue
+		}
+		var id identity.NodeID
+		copy(id[:], idBytes)
+		b, err := trustStore.ScoreForNode(id, n.FirstSeen, now)
+		if err != nil {
+			return nil, err
+		}
+		proxEvents, err := trustStore.TotalProximityEvents(id)
+		if err != nil {
+			return nil, err
+		}
+		endorsers, err := trustStore.EndorsementCount(id)
+		if err != nil {
+			return nil, err
+		}
+		scores = append(scores, TrustScore{
+			NodeID:           n.NodeID,
+			Status:           n.Status,
+			Longevity:        int(b.LongevityComponent),
+			Proximity:        int(b.ProximityComponent),
+			Endorsements:     int(b.EndorsementComponent),
+			Total:            int(b.Total),
+			ProximityEvents:  proxEvents,
+			EndorsementCount: endorsers,
+		})
+	}
+	return scores, nil
 }
 
 // RelayHubs returns every relay hub record.

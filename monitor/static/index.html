@@ -17,6 +17,7 @@
       <a href="#routes" data-view="routes">Routes</a>
       <a href="#graph" data-view="graph">Network Graph</a>
       <a href="#map" data-view="map">Node Map</a>
+      <a href="#trust" data-view="trust">Trust Scores</a>
       <a href="#relay" data-view="relay">Relay Hubs</a>
       <a href="#" id="logout">Logout</a>
     </nav>
@@ -88,10 +89,26 @@
     <section id="view-map" class="hidden">
       <div class="panel">
         <h2>Node Map</h2>
-        <p>Nodes with GPS coordinates appear on the map. Others are listed below.</p>
+        <p>Marker colour reflects trust score (red → amber → green → blue).</p>
         <div id="map"></div>
         <h3>Nodes without GPS</h3>
         <ul id="no-gps-list"></ul>
+      </div>
+    </section>
+
+    <section id="view-trust" class="hidden">
+      <div class="panel">
+        <h2>Trust Scores</h2>
+        <p>0–100 score from longevity, hub-observed proximity, and endorsements (diminishing per endorser).</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Node ID</th><th>Status</th><th>Total</th><th>Longevity</th>
+              <th>Proximity</th><th>Endorsements</th><th>Proximity events</th><th>Endorsers</th>
+            </tr>
+          </thead>
+          <tbody id="trust-table"></tbody>
+        </table>
       </div>
     </section>
 
