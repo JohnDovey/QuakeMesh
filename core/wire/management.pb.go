@@ -37,6 +37,7 @@ type ManagementEvent struct {
 	//	*ManagementEvent_RouteChanged
 	//	*ManagementEvent_DtnQueueDepthChanged
 	//	*ManagementEvent_HubStatusChanged
+	//	*ManagementEvent_InternetFallbackChanged
 	Event         isManagementEvent_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -122,6 +123,15 @@ func (x *ManagementEvent) GetHubStatusChanged() *HubStatusChanged {
 	return nil
 }
 
+func (x *ManagementEvent) GetInternetFallbackChanged() *InternetFallbackChanged {
+	if x != nil {
+		if x, ok := x.Event.(*ManagementEvent_InternetFallbackChanged); ok {
+			return x.InternetFallbackChanged
+		}
+	}
+	return nil
+}
+
 type isManagementEvent_Event interface {
 	isManagementEvent_Event()
 }
@@ -142,6 +152,10 @@ type ManagementEvent_HubStatusChanged struct {
 	HubStatusChanged *HubStatusChanged `protobuf:"bytes,5,opt,name=hub_status_changed,json=hubStatusChanged,proto3,oneof"`
 }
 
+type ManagementEvent_InternetFallbackChanged struct {
+	InternetFallbackChanged *InternetFallbackChanged `protobuf:"bytes,6,opt,name=internet_fallback_changed,json=internetFallbackChanged,proto3,oneof"`
+}
+
 func (*ManagementEvent_NodeStatusChanged) isManagementEvent_Event() {}
 
 func (*ManagementEvent_RouteChanged) isManagementEvent_Event() {}
@@ -149,6 +163,8 @@ func (*ManagementEvent_RouteChanged) isManagementEvent_Event() {}
 func (*ManagementEvent_DtnQueueDepthChanged) isManagementEvent_Event() {}
 
 func (*ManagementEvent_HubStatusChanged) isManagementEvent_Event() {}
+
+func (*ManagementEvent_InternetFallbackChanged) isManagementEvent_Event() {}
 
 type HubStatusChanged struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -366,17 +382,62 @@ func (x *DtnQueueDepthChanged) GetDepth() uint32 {
 	return 0
 }
 
+type InternetFallbackChanged struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InternetFallbackChanged) Reset() {
+	*x = InternetFallbackChanged{}
+	mi := &file_management_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InternetFallbackChanged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InternetFallbackChanged) ProtoMessage() {}
+
+func (x *InternetFallbackChanged) ProtoReflect() protoreflect.Message {
+	mi := &file_management_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InternetFallbackChanged.ProtoReflect.Descriptor instead.
+func (*InternetFallbackChanged) Descriptor() ([]byte, []int) {
+	return file_management_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *InternetFallbackChanged) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
 var File_management_proto protoreflect.FileDescriptor
 
 const file_management_proto_rawDesc = "" +
 	"\n" +
-	"\x10management.proto\x12\x0equakemesh.wire\"\x92\x03\n" +
+	"\x10management.proto\x12\x0equakemesh.wire\"\xf9\x03\n" +
 	"\x0fManagementEvent\x12+\n" +
 	"\x12emitted_at_unix_ms\x18\x01 \x01(\x03R\x0femittedAtUnixMs\x12S\n" +
 	"\x13node_status_changed\x18\x02 \x01(\v2!.quakemesh.wire.NodeStatusChangedH\x00R\x11nodeStatusChanged\x12C\n" +
 	"\rroute_changed\x18\x03 \x01(\v2\x1c.quakemesh.wire.RouteChangedH\x00R\frouteChanged\x12]\n" +
 	"\x17dtn_queue_depth_changed\x18\x04 \x01(\v2$.quakemesh.wire.DtnQueueDepthChangedH\x00R\x14dtnQueueDepthChanged\x12P\n" +
-	"\x12hub_status_changed\x18\x05 \x01(\v2 .quakemesh.wire.HubStatusChangedH\x00R\x10hubStatusChangedB\a\n" +
+	"\x12hub_status_changed\x18\x05 \x01(\v2 .quakemesh.wire.HubStatusChangedH\x00R\x10hubStatusChanged\x12e\n" +
+	"\x19internet_fallback_changed\x18\x06 \x01(\v2'.quakemesh.wire.InternetFallbackChangedH\x00R\x17internetFallbackChangedB\a\n" +
 	"\x05event\"A\n" +
 	"\x10HubStatusChanged\x12\x15\n" +
 	"\x06hub_id\x18\x01 \x01(\fR\x05hubId\x12\x16\n" +
@@ -390,7 +451,9 @@ const file_management_proto_rawDesc = "" +
 	"\x02tq\x18\x03 \x01(\x01R\x02tq\x12\x1b\n" +
 	"\thop_count\x18\x04 \x01(\rR\bhopCount\",\n" +
 	"\x14DtnQueueDepthChanged\x12\x14\n" +
-	"\x05depth\x18\x01 \x01(\rR\x05depthBE\n" +
+	"\x05depth\x18\x01 \x01(\rR\x05depth\"3\n" +
+	"\x17InternetFallbackChanged\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabledBE\n" +
 	"\x13net.quakemesh.protoZ.github.com/JohnDovey/QuakeMesh/proto/wire;wireb\x06proto3"
 
 var (
@@ -405,24 +468,26 @@ func file_management_proto_rawDescGZIP() []byte {
 	return file_management_proto_rawDescData
 }
 
-var file_management_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_management_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_management_proto_goTypes = []any{
-	(*ManagementEvent)(nil),      // 0: quakemesh.wire.ManagementEvent
-	(*HubStatusChanged)(nil),     // 1: quakemesh.wire.HubStatusChanged
-	(*NodeStatusChanged)(nil),    // 2: quakemesh.wire.NodeStatusChanged
-	(*RouteChanged)(nil),         // 3: quakemesh.wire.RouteChanged
-	(*DtnQueueDepthChanged)(nil), // 4: quakemesh.wire.DtnQueueDepthChanged
+	(*ManagementEvent)(nil),         // 0: quakemesh.wire.ManagementEvent
+	(*HubStatusChanged)(nil),        // 1: quakemesh.wire.HubStatusChanged
+	(*NodeStatusChanged)(nil),       // 2: quakemesh.wire.NodeStatusChanged
+	(*RouteChanged)(nil),            // 3: quakemesh.wire.RouteChanged
+	(*DtnQueueDepthChanged)(nil),    // 4: quakemesh.wire.DtnQueueDepthChanged
+	(*InternetFallbackChanged)(nil), // 5: quakemesh.wire.InternetFallbackChanged
 }
 var file_management_proto_depIdxs = []int32{
 	2, // 0: quakemesh.wire.ManagementEvent.node_status_changed:type_name -> quakemesh.wire.NodeStatusChanged
 	3, // 1: quakemesh.wire.ManagementEvent.route_changed:type_name -> quakemesh.wire.RouteChanged
 	4, // 2: quakemesh.wire.ManagementEvent.dtn_queue_depth_changed:type_name -> quakemesh.wire.DtnQueueDepthChanged
 	1, // 3: quakemesh.wire.ManagementEvent.hub_status_changed:type_name -> quakemesh.wire.HubStatusChanged
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 4: quakemesh.wire.ManagementEvent.internet_fallback_changed:type_name -> quakemesh.wire.InternetFallbackChanged
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_management_proto_init() }
@@ -435,6 +500,7 @@ func file_management_proto_init() {
 		(*ManagementEvent_RouteChanged)(nil),
 		(*ManagementEvent_DtnQueueDepthChanged)(nil),
 		(*ManagementEvent_HubStatusChanged)(nil),
+		(*ManagementEvent_InternetFallbackChanged)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -442,7 +508,7 @@ func file_management_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_management_proto_rawDesc), len(file_management_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

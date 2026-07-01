@@ -205,3 +205,13 @@ func (s *Server) DtnQueueDepthChanged(depth int) {
 		},
 	})
 }
+
+// InternetFallbackChanged implements fallback.Notifier.
+func (s *Server) InternetFallbackChanged(enabled bool) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_InternetFallbackChanged{
+			InternetFallbackChanged: &wire.InternetFallbackChanged{Enabled: enabled},
+		},
+	})
+}

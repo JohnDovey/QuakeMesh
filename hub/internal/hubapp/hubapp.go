@@ -4,10 +4,12 @@
 //   0.0.3 - Initial Phase 2 orchestration: identity + registry + OGM
 //           engine + management API wired into one runnable Hub.
 //   0.0.7 - Phase 6: DTN store-and-forward engine wired into hub lifecycle.
+//   0.0.11 - Phase 9: gossip sync, metrics, internet-fallback watcher.
 
 // Package hubapp wires identity, the SQLite registry, the OGM engine,
-// the DTN engine, and the loopback management API into a single runnable
-// QuakeMeshHub instance. See "QuakeMeshHub" and Phase 2 in /plan.md.
+// the DTN engine, gossip sync, and the loopback management API into a
+// single runnable QuakeMeshHub instance. See "QuakeMeshHub" and Phase 2
+// in /plan.md.
 package hubapp
 
 import (
@@ -18,12 +20,16 @@ import (
 
 	"github.com/JohnDovey/QuakeMesh/core/dtn"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/metrics"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
 	"github.com/JohnDovey/QuakeMesh/core/trust"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/configstore"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/dtnengine"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/fallback"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/managementapi"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/ogmengine"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/syncengine"
 )
 
 // Config configures a runnable Hub instance.
@@ -54,6 +60,8 @@ type Config struct {
 	// DTNInterval is how often the DTN engine sweeps expiry and attempts
 	// delivery.
 	DTNInterval time.Duration
+	// SyncInterval is how often to gossip HubSyncMessage to peers.
+	SyncInterval time.Duration
 }
 
 // DefaultConfig returns sensible defaults for the tuning parameters.
@@ -66,6 +74,7 @@ func DefaultConfig() Config {
 		OGMTTL:      3,
 		DTNTTL:      24 * time.Hour,
 		DTNInterval: 5 * time.Second,
+		SyncInterval: 30 * time.Second,
 	}
 }
 
@@ -78,6 +87,8 @@ type Hub struct {
 	Registry *registry.Registry
 	OGM      *ogmengine.Engine
 	DTN      *dtnengine.Engine
+	Sync     *syncengine.Engine
+	Fallback *fallback.Engine
 	API      *managementapi.Server
 }
 
@@ -97,6 +108,8 @@ func New(cfg Config) (*Hub, error) {
 
 	reg := registry.New(db)
 	api := managementapi.New(cfg.ManagementAddr)
+	cfgStore := configstore.New(db)
+	metricsStore := metrics.NewStore(db)
 	dtnStore := dtn.NewStore(db)
 	trustStore := trust.NewStore(db)
 	dtnEng := dtnengine.New(dtnengine.Config{
@@ -106,7 +119,19 @@ func New(cfg Config) (*Hub, error) {
 		TTL:      cfg.DTNTTL,
 		Interval: cfg.DTNInterval,
 	})
+	fallbackEng := fallback.New(cfgStore, api)
 	events := &eventBridge{api: api, dtn: dtnEng}
+	syncBind, err := syncengine.SyncBindAddr(cfg.OGMBindAddr)
+	if err != nil {
+		return nil, fmt.Errorf("hubapp: sync bind addr: %w", err)
+	}
+	syncEng := syncengine.New(syncengine.Config{
+		SelfID:   id.NodeID,
+		BindAddr: syncBind,
+		Peers:    syncengine.PeerSyncAddrs(cfg.Peers),
+		Interval: cfg.SyncInterval,
+		Registry: reg,
+	})
 	ogm := ogmengine.New(ogmengine.Config{
 		SelfID:     id.NodeID,
 		BindAddr:   cfg.OGMBindAddr,
@@ -116,10 +141,14 @@ func New(cfg Config) (*Hub, error) {
 		TTL:        cfg.OGMTTL,
 		Registry:   reg,
 		Trust:      trustStore,
+		Metrics:    metricsStore,
 		Handler:    events,
 	})
 
-	return &Hub{cfg: cfg, Identity: id, DB: db, Registry: reg, OGM: ogm, DTN: dtnEng, API: api}, nil
+	return &Hub{
+		cfg: cfg, Identity: id, DB: db, Registry: reg,
+		OGM: ogm, DTN: dtnEng, Sync: syncEng, Fallback: fallbackEng, API: api,
+	}, nil
 }
 
 // Start begins the management API's HTTP server, the DTN engine, and the
@@ -129,7 +158,16 @@ func (h *Hub) Start() error {
 		return fmt.Errorf("hubapp: start management API: %w", err)
 	}
 	h.DTN.Start()
+	h.Fallback.Start()
+	if err := h.Sync.Start(); err != nil {
+		h.Fallback.Close()
+		h.DTN.Close()
+		h.API.Close()
+		return fmt.Errorf("hubapp: start sync engine: %w", err)
+	}
 	if err := h.OGM.Start(); err != nil {
+		h.Sync.Close()
+		h.Fallback.Close()
 		h.DTN.Close()
 		h.API.Close()
 		return fmt.Errorf("hubapp: start OGM engine: %w", err)
@@ -158,8 +196,9 @@ func (h *Hub) registerSelfHub() error {
 // Close stops the OGM engine, DTN engine, and management API and closes
 // the registry database.
 func (h *Hub) Close() error {
+	h.Fallback.Close()
 	h.DTN.Close()
-	return errors.Join(h.OGM.Close(), h.API.Close(), h.DB.Close())
+	return errors.Join(h.Sync.Close(), h.OGM.Close(), h.API.Close(), h.DB.Close())
 }
 
 type eventBridge struct {

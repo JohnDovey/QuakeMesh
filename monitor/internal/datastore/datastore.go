@@ -6,6 +6,7 @@
 //   0.0.7 - hub_registry queries; nodes exclude backbone hubs.
 //   0.0.9 - Trust score breakdown per mesh node.
 //   0.0.10 - Orphan direction hints for stale nodes on the Node Map.
+//   0.0.11 - Hop latency history and internet-fallback config for Monitor.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -16,11 +17,14 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/location"
+	"github.com/JohnDovey/QuakeMesh/core/metrics"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
 	"github.com/JohnDovey/QuakeMesh/core/trust"
 )
@@ -82,8 +86,16 @@ type Overview struct {
 	TotalHubs     int `json:"total_hubs"`
 	OnlineHubs    int `json:"online_hubs"`
 	OfflineHubs   int `json:"offline_hubs"`
-	RouteCount    int `json:"route_count"`
-	DTNDepth      int `json:"dtn_depth"`
+	RouteCount    int  `json:"route_count"`
+	DTNDepth      int  `json:"dtn_depth"`
+	InternetFallback bool `json:"internet_fallback_enabled"`
+}
+
+// HopLatencyPoint is one route_latency_ms sample for charts.
+type HopLatencyPoint struct {
+	RecordedAt time.Time `json:"recorded_at"`
+	Value      float64   `json:"value"`
+	NodeID     string    `json:"node_id,omitempty"`
 }
 
 // TrustScore is a per-node trust breakdown for the dashboard.
@@ -263,6 +275,11 @@ func (s *Store) OverviewSnapshot() (Overview, error) {
 		time.Now().UnixMilli(),
 	).Scan(&o.DTNDepth); err != nil {
 		return o, err
+	}
+	var fbErr error
+	o.InternetFallback, fbErr = s.InternetFallbackEnabled()
+	if fbErr != nil {
+		return o, fbErr
 	}
 	return o, nil
 }
@@ -480,4 +497,52 @@ func relayHubID(ip string, port int) identity.NodeID {
 	var id identity.NodeID
 	copy(id[:], sum[:])
 	return id
+}
+
+const configKeyInternetFallback = "internet_fallback_enabled"
+
+// InternetFallbackEnabled reads the hub config toggle.
+func (s *Store) InternetFallbackEnabled() (bool, error) {
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM config WHERE key = ?`, configKeyInternetFallback).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, nil
+	}
+	return parsed, nil
+}
+
+// SetInternetFallbackEnabled updates the hub config toggle.
+func (s *Store) SetInternetFallbackEnabled(enabled bool) error {
+	_, err := s.db.Exec(
+		`INSERT INTO config (key, value) VALUES (?, ?)
+		 ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		configKeyInternetFallback, strconv.FormatBool(enabled),
+	)
+	return err
+}
+
+// HopLatency returns recent route_latency_ms samples within the window.
+func (s *Store) HopLatency(window time.Duration, limit int) ([]HopLatencyPoint, error) {
+	until := time.Now()
+	since := until.Add(-window)
+	samples, err := metrics.NewStore(s.db).Query(metrics.MetricRouteLatencyMs, since, until, limit)
+	if err != nil {
+		return nil, err
+	}
+	points := make([]HopLatencyPoint, 0, len(samples))
+	for _, samp := range samples {
+		pt := HopLatencyPoint{RecordedAt: samp.RecordedAt, Value: samp.Value}
+		if samp.NodeID != nil {
+			pt.NodeID = samp.NodeID.String()
+		}
+		points = append(points, pt)
+	}
+	return points, nil
 }

@@ -50,8 +50,9 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 }
 
 func TestHub_ThreeHubsConvergeRouting(t *testing.T) {
-	ogmPorts := []int{19101, 19102, 19103}
-	mgmtPorts := []int{19111, 19112, 19113}
+	// OGM ports spaced by 2 so sync bind (OGM+1) does not collide with peers.
+	ogmPorts := []int{19101, 19103, 19105}
+	mgmtPorts := []int{19111, 19113, 19115}
 
 	var hubs []*Hub
 	for i := range ogmPorts {
@@ -103,9 +104,9 @@ func TestHub_ThreeHubsConvergeRouting(t *testing.T) {
 }
 
 func TestHub_LinearThreeHopChain(t *testing.T) {
-	ogmPorts := []int{19201, 19202, 19203}
-	mgmtPorts := []int{19211, 19212, 19213}
-	peerMap := [][]int{{19202}, {19201, 19203}, {19202}}
+	ogmPorts := []int{19201, 19203, 19205}
+	mgmtPorts := []int{19211, 19213, 19215}
+	peerMap := [][]int{{19203}, {19201, 19205}, {19203}}
 
 	var hubs []*Hub
 	for i := range ogmPorts {

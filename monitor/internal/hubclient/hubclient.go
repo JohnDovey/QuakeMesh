@@ -35,6 +35,7 @@ type Event struct {
 	TQ              float64 `json:"tq,omitempty"`
 	HopCount        uint32  `json:"hop_count,omitempty"`
 	DTNDepth        uint32  `json:"dtn_depth,omitempty"`
+	Enabled         bool    `json:"enabled,omitempty"`
 }
 
 // Client subscribes to QuakeMeshHub's loopback /ws management stream.
@@ -175,6 +176,12 @@ func translateEvent(mgmt *wire.ManagementEvent) (Event, bool) {
 			Type:            "dtn_queue_depth_changed",
 			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
 			DTNDepth:        e.DtnQueueDepthChanged.Depth,
+		}, true
+	case *wire.ManagementEvent_InternetFallbackChanged:
+		return Event{
+			Type:            "internet_fallback_changed",
+			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
+			Enabled:         e.InternetFallbackChanged.Enabled,
 		}, true
 	default:
 		return base, false

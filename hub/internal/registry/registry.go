@@ -5,6 +5,7 @@
 //           the Phase 2 OGM engine and management API.
 //   0.0.6 - GetRoute and DeleteRoutesViaNextHop for Phase 5 failover.
 //   0.0.7 - hub_registry access for backbone hub tracking in Monitor.
+//   0.0.11 - Gossip merge helpers and relay_hubs export.
 
 // Package registry provides typed access to the node_registry and
 // routing_table tables (see /core/storage) backing QuakeMeshHub.
@@ -406,4 +407,105 @@ func (r *Registry) Hubs() ([]Hub, error) {
 		hubs = append(hubs, h)
 	}
 	return hubs, rows.Err()
+}
+
+// RelayHubRow is a row from relay_hubs for gossip export.
+type RelayHubRow struct {
+	HubID        identity.NodeID
+	IP           string
+	Port         int
+	Source       string
+	LastVerified time.Time
+}
+
+// ListRelayHubs returns every relay_hubs row.
+func (r *Registry) ListRelayHubs() ([]RelayHubRow, error) {
+	rows, err := r.db.Query(`SELECT hub_id, ip, port, source, last_verified FROM relay_hubs`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var hubs []RelayHubRow
+	for rows.Next() {
+		var idBytes []byte
+		var ip, source string
+		var port int
+		var verifiedMs int64
+		if err := rows.Scan(&idBytes, &ip, &port, &source, &verifiedMs); err != nil {
+			return nil, err
+		}
+		var id identity.NodeID
+		copy(id[:], idBytes)
+		hubs = append(hubs, RelayHubRow{
+			HubID:        id,
+			IP:           ip,
+			Port:         port,
+			Source:       source,
+			LastVerified: time.UnixMilli(verifiedMs),
+		})
+	}
+	return hubs, rows.Err()
+}
+
+// UpsertGossipRelay merges a gossiped relay hub if newer.
+func (r *Registry) UpsertGossipRelay(hubID identity.NodeID, ip string, port int, verifiedAt time.Time) (bool, error) {
+	verifiedMs := verifiedAt.UnixMilli()
+	var existingMs int64
+	err := r.db.QueryRow(`SELECT last_verified FROM relay_hubs WHERE hub_id = ?`, hubID[:]).Scan(&existingMs)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		_, err = r.db.Exec(
+			`INSERT INTO relay_hubs (hub_id, ip, port, source, last_verified) VALUES (?, ?, ?, 'gossip', ?)`,
+			hubID[:], ip, port, verifiedMs,
+		)
+		return err == nil, err
+	case err != nil:
+		return false, err
+	default:
+		if verifiedMs <= existingMs {
+			return false, nil
+		}
+		_, err = r.db.Exec(
+			`UPDATE relay_hubs SET ip = ?, port = ?, source = 'gossip', last_verified = ? WHERE hub_id = ?`,
+			ip, port, verifiedMs, hubID[:],
+		)
+		return err == nil, err
+	}
+}
+
+// MergeGossipNode applies a last-writer-wins node_registry update from gossip.
+func (r *Registry) MergeGossipNode(nodeID identity.NodeID, firstSeen, lastSeen time.Time, status NodeStatus, lat, lon *float64) (bool, error) {
+	lastMs := lastSeen.UnixMilli()
+	var localLast int64
+	err := r.db.QueryRow(`SELECT last_seen FROM node_registry WHERE node_id = ?`, nodeID[:]).Scan(&localLast)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		firstMs := firstSeen.UnixMilli()
+		var latVal, lonVal any
+		if lat != nil {
+			latVal = *lat
+		}
+		if lon != nil {
+			lonVal = *lon
+		}
+		_, err = r.db.Exec(
+			`INSERT INTO node_registry (node_id, first_seen, last_seen, last_lat, last_lon, status)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+			nodeID[:], firstMs, lastMs, latVal, lonVal, string(status),
+		)
+		return err == nil, err
+	case err != nil:
+		return false, err
+	default:
+		if lastMs <= localLast {
+			return false, nil
+		}
+		_, err = r.db.Exec(
+			`UPDATE node_registry SET last_seen = ?, last_lat = COALESCE(?, last_lat),
+			 last_lon = COALESCE(?, last_lon), status = ? WHERE node_id = ?`,
+			lastMs, lat, lon, string(status), nodeID[:],
+		)
+		return err == nil, err
+	}
 }

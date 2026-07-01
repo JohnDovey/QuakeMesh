@@ -89,6 +89,9 @@ button.danger { background: #da3633; }
 .form-row input { width: auto; min-width: 140px; margin-bottom: 0; }
 .hidden { display: none; }
 .graph-panel { height: 480px; border-radius: 8px; background: #0f1419; }
+#hop-latency-chart { max-height: 360px; }
+label.toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: #c9d1d9; }
+label.toggle input { width: 1rem; height: 1rem; }
 .graph-legend {
   display: flex;
   gap: 1.25rem;

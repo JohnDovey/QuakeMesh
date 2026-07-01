@@ -5,6 +5,7 @@
 //           embedded static dashboard assets.
 //   0.0.7 - /api/hubs and hub counts in overview snapshot.
 //   0.0.9 - /api/trust-scores for Phase 7 trust register view.
+//   0.0.11 - /api/metrics/hop-latency and /api/internet-fallback.
 
 package server
 
@@ -73,6 +74,8 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/trust-scores", s.requireAuth(s.handleTrustScores))
 	mux.HandleFunc("/api/relay-hubs", s.requireAuth(s.handleRelayHubs))
 	mux.HandleFunc("/api/relay-hubs/", s.requireAuth(s.handleRelayHubAction))
+	mux.HandleFunc("/api/metrics/hop-latency", s.requireAuth(s.handleHopLatency))
+	mux.HandleFunc("/api/internet-fallback", s.requireAuth(s.handleInternetFallback))
 	mux.HandleFunc("/ws", s.requireAuthWS(s.handleBrowserWS))
 	mux.Handle("/", s.handleStatic())
 
@@ -368,6 +371,52 @@ func (s *Server) handleRelayHubAction(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
+func (s *Server) handleHopLatency(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	window := time.Hour
+	if q := r.URL.Query().Get("window"); q != "" {
+		if d, err := time.ParseDuration(q); err == nil && d > 0 {
+			window = d
+		}
+	}
+	points, err := s.cfg.Data.HopLatency(window, 500)
+	if err != nil {
+		http.Error(w, "hop latency query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, points)
+}
+
+func (s *Server) handleInternetFallback(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		enabled, err := s.cfg.Data.InternetFallbackEnabled()
+		if err != nil {
+			http.Error(w, "config query failed", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]bool{"enabled": enabled})
+	case http.MethodPatch:
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if err := s.cfg.Data.SetInternetFallbackEnabled(body.Enabled); err != nil {
+			http.Error(w, "config update failed", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]bool{"enabled": body.Enabled})
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := browserUpgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -398,6 +447,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 			"offline_hubs":   o.OfflineHubs,
 			"route_count":    o.RouteCount,
 			"dtn_depth":      o.DTNDepth,
+			"internet_fallback_enabled": o.InternetFallback,
 		})
 	}
 

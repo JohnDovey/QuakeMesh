@@ -8,6 +8,8 @@ let orphanHints = [];
 let orphanLayers = [];
 let routes = [];
 let graphNetwork = null;
+let hopChart = null;
+let fallbackEnabled = false;
 
 function showView(name) {
   for (const el of document.querySelectorAll('main > section')) el.classList.add('hidden');
@@ -17,6 +19,7 @@ function showView(name) {
   }
   if (name === 'map') ensureMap();
   if (name === 'graph') ensureGraph();
+  if (name === 'hop-timing') loadHopLatency();
 }
 
 document.querySelectorAll('nav a[data-view]').forEach((a) => {
@@ -35,6 +38,16 @@ function applyOverview(o) {
   document.getElementById('stat-hubs-offline').textContent = o.offline_hubs ?? o.OfflineHubs ?? '0';
   document.getElementById('stat-routes').textContent = o.route_count ?? o.RouteCount ?? '0';
   document.getElementById('stat-dtn').textContent = o.dtn_depth ?? o.DTNDepth ?? '0';
+  const fb = o.internet_fallback_enabled ?? o.InternetFallback;
+  if (fb != null) setFallbackUI(!!fb);
+}
+
+function setFallbackUI(enabled) {
+  fallbackEnabled = enabled;
+  const el = document.getElementById('stat-fallback');
+  if (el) el.textContent = enabled ? 'allowed' : 'off';
+  const toggle = document.getElementById('fallback-toggle');
+  if (toggle) toggle.checked = enabled;
 }
 
 function hubEndpoint(h) {
@@ -423,6 +436,70 @@ function refreshGraph() {
   });
 }
 
+async function loadHopLatency() {
+  const points = await api('/api/metrics/hop-latency?window=1h') || [];
+  renderHopChart(points);
+}
+
+function renderHopChart(points) {
+  const canvas = document.getElementById('hop-latency-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const sorted = [...points].sort((a, b) => new Date(a.recorded_at) - new Date(b.recorded_at));
+  const labels = sorted.map((p) => formatDateTime(p.recorded_at));
+  const values = sorted.map((p) => p.value);
+  if (hopChart) {
+    hopChart.data.labels = labels;
+    hopChart.data.datasets[0].data = values;
+    hopChart.update();
+    return;
+  }
+  hopChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Route latency (ms)',
+        data: values,
+        borderColor: '#6cb6ff',
+        backgroundColor: 'rgba(108, 182, 255, 0.15)',
+        fill: true,
+        tension: 0.2,
+        pointRadius: sorted.length > 80 ? 0 : 3,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: '#9da7b3', maxTicksLimit: 8 } },
+        y: { ticks: { color: '#9da7b3' }, title: { display: true, text: 'ms', color: '#9da7b3' } },
+      },
+      plugins: { legend: { labels: { color: '#e7ecf1' } } },
+    },
+  });
+}
+
+async function loadInternetFallback() {
+  const cfg = await api('/api/internet-fallback');
+  if (cfg) setFallbackUI(!!cfg.enabled);
+}
+
+async function saveInternetFallback(enabled) {
+  const cfg = await api('/api/internet-fallback', {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  });
+  if (cfg) setFallbackUI(!!cfg.enabled);
+}
+
+document.getElementById('fallback-toggle')?.addEventListener('change', async (e) => {
+  try {
+    await saveInternetFallback(e.target.checked);
+  } catch (_) {
+    e.target.checked = fallbackEnabled;
+  }
+});
+
 async function loadOverview() {
   const o = await api('/api/overview');
   if (o) applyOverview(o);
@@ -434,7 +511,7 @@ async function loadRelayHubs() {
   tbody.innerHTML = '';
   for (const h of hubs) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${h.ip}</td><td>${h.port}</td><td>${h.source}</td>
+    tr.innerHTML = `<td title="${h.hub_id}">${shortId(h.hub_id)}</td><td>${h.ip}</td><td>${h.port}</td><td>${h.source}</td>
       <td>${formatDateTime(h.last_verified)}</td>
       <td>
         <button class="secondary probe-btn" data-id="${h.hub_id}">Probe</button>
@@ -493,9 +570,7 @@ connectWS((ev) => {
     loadOverview();
     loadRoutes();
     loadHubs();
-  }
-  if (ev.type === 'dtn_queue_depth_changed') {
-    document.getElementById('stat-dtn').textContent = ev.dtn_depth;
+    loadHopLatency();
   }
 });
 
@@ -508,6 +583,7 @@ connectWS((ev) => {
     await loadOrphanHints();
     await loadRoutes();
     await loadRelayHubs();
+    await loadInternetFallback();
   } catch (_) {
     window.location.href = '/login';
   }

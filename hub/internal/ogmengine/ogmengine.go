@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/metrics"
 	"github.com/JohnDovey/QuakeMesh/core/routing"
 	"github.com/JohnDovey/QuakeMesh/core/trust"
 	"github.com/JohnDovey/QuakeMesh/core/wire"
@@ -55,6 +56,7 @@ type Config struct {
 	TTL        uint32
 	Registry   *registry.Registry
 	Trust      *trust.Store
+	Metrics    *metrics.Store
 	Handler    EventHandler
 }
 
@@ -394,6 +396,10 @@ func (e *Engine) maybeUpsertRoute(candidate registry.Route) {
 	if err := e.cfg.Registry.UpsertRoute(candidate); err != nil {
 		log.Printf("ogmengine: UpsertRoute: %v", err)
 		return
+	}
+	if e.cfg.Metrics != nil {
+		dest := candidate.Destination
+		_ = e.cfg.Metrics.Record(metrics.MetricRouteLatencyMs, &dest, float64(candidate.LatencyMs), time.Now())
 	}
 	if e.cfg.Handler != nil {
 		e.cfg.Handler.RouteChanged(candidate)
