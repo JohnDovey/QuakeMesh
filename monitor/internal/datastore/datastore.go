@@ -148,7 +148,10 @@ func (s *Store) OverviewSnapshot() (Overview, error) {
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM routing_table`).Scan(&o.RouteCount); err != nil {
 		return o, err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM dtq_queue`).Scan(&o.DTNDepth); err != nil {
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM dtq_queue WHERE expires_at > ?`,
+		time.Now().UnixMilli(),
+	).Scan(&o.DTNDepth); err != nil {
 		return o, err
 	}
 	return o, nil

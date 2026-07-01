@@ -8,9 +8,10 @@
 //   0.0.4 - Version bump only; Phase 3 landed in /monitor.
 //   0.0.5 - Version bump only; Phase 4 landed in /android.
 //   0.0.6 - Phase 5: multi-hop OGM rebroadcast, route metric, failover.
+//   0.0.7 - Phase 6: DTN store-and-forward queue.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.6"
+const Version = "0.0.7"

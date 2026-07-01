@@ -6,6 +6,7 @@
 //           directly into ogmengine. Start now actually records the
 //           bound address (exposed via Addr) -- it was declared but
 //           never assigned, nil-panicking any caller that used it.
+//   0.0.7 - Phase 6: DtnQueueDepthChanged management event.
 
 // Package managementapi implements QuakeMeshHub's loopback management
 // API: an HTTP server exposing a /ws WebSocket endpoint that streams
@@ -178,6 +179,16 @@ func (s *Server) RouteChanged(route registry.Route) {
 				Tq:            route.TQ,
 				HopCount:      uint32(route.HopCount),
 			},
+		},
+	})
+}
+
+// DtnQueueDepthChanged notifies subscribers of the current DTN queue depth.
+func (s *Server) DtnQueueDepthChanged(depth int) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_DtnQueueDepthChanged{
+			DtnQueueDepthChanged: &wire.DtnQueueDepthChanged{Depth: uint32(depth)},
 		},
 	})
 }

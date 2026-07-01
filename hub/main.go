@@ -5,13 +5,14 @@
 //   0.0.3 - Phase 2: CLI flags wired into hubapp.Hub; runs the OGM
 //           engine and loopback management API until SIGINT/SIGTERM.
 //   0.0.6 - Phase 5: multi-hop OGM engine (no CLI changes).
+//   0.0.7 - Phase 6: DTN bundle TTL flag.
 
 // Command quakemeshhub is the stable-backbone binary: registry, routing,
 // NAT relay, and Hub-to-Hub sync. See "Project Names" in /plan.md.
 //
-// Phase 2–5 scope: SQLite-backed registry, multi-hop OGM routing over UDP
-// against a statically configured peer list, and the loopback management
-// API's /ws event stream.
+// Phase 2–6 scope: SQLite-backed registry, multi-hop OGM routing over UDP
+// against a statically configured peer list, DTN store-and-forward queue, and
+// the loopback management API's /ws event stream.
 package main
 
 import (
@@ -37,6 +38,7 @@ func main() {
 	flag.StringVar(&cfg.ManagementAddr, "management-addr", loopbackManagementAddr, "loopback management API bind address")
 	flag.DurationVar(&cfg.OGMInterval, "ogm-interval", cfg.OGMInterval, "how often to broadcast an OGM to configured peers")
 	flag.DurationVar(&cfg.StaleAfter, "stale-after", cfg.StaleAfter, "mark a peer stale after this long without a received OGM")
+	flag.DurationVar(&cfg.DTNTTL, "dtn-ttl", cfg.DTNTTL, "default TTL for queued DTN bundles")
 	flag.Parse()
 
 	if peers != "" {

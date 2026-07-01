@@ -6,6 +6,7 @@
 //   0.0.6 - Phase 5: multi-hop OGM rebroadcast, TQ = EQ/RQ window, Hello
 //           RTT measurement, route metric selection, and failover on stale
 //           next-hops.
+//   0.0.7 - Phase 6: stale-node probing, revival "I'm up" rebroadcast.
 
 // Package ogmengine sends and receives OGMs (Originator Messages) over
 // UDP, maintaining node_registry/routing_table entries for reachable
@@ -102,11 +103,12 @@ func (e *Engine) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
 
-	e.wg.Add(4)
+	e.wg.Add(5)
 	go e.receiveLoop(ctx)
 	go e.sendLoop(ctx)
 	go e.staleSweepLoop(ctx)
 	go e.helloLoop(ctx)
+	go e.staleProbeLoop(ctx)
 	return nil
 }
 
@@ -154,6 +156,30 @@ func (e *Engine) broadcastOnce() {
 		IsStartupAnnounce: seq == 1,
 	}
 	e.floodOgm(msg, "")
+}
+
+func (e *Engine) broadcastStartup() {
+	seq := atomic.AddUint64(&e.seq, 1)
+	msg := &wire.Ogm{
+		NodeId:            e.cfg.SelfID[:],
+		SequenceNumber:    seq,
+		Ttl:               e.cfg.TTL,
+		HopCount:          0,
+		IsStartupAnnounce: true,
+	}
+	e.floodOgm(msg, "")
+}
+
+func (e *Engine) rebroadcastStartup(msg *wire.Ogm, fromAddr string) {
+	if msg.Ttl == 0 {
+		return
+	}
+	reb := proto.Clone(msg).(*wire.Ogm)
+	reb.IsStartupAnnounce = true
+	reb.Ttl--
+	reb.HopCount++
+	reb.LastHopId = e.cfg.SelfID[:]
+	e.floodOgm(reb, fromAddr)
 }
 
 func (e *Engine) floodOgm(msg *wire.Ogm, exceptAddr string) {
@@ -264,6 +290,7 @@ func (e *Engine) handleOgm(msg *wire.Ogm, raddr *net.UDPAddr) {
 	}
 	if statusChanged && e.cfg.Handler != nil {
 		e.cfg.Handler.NodeStatusChanged(originID, registry.NodeStatusOnline)
+		e.rebroadcastStartup(msg, addrKey)
 	}
 
 	hopCount := int(msg.HopCount) + 1
@@ -429,6 +456,43 @@ func (e *Engine) sendHellos() {
 		e.mu.Unlock()
 		_, _ = e.conn.WriteToUDP(payload, peerAddr)
 	}
+}
+
+func (e *Engine) staleProbeLoop(ctx context.Context) {
+	defer e.wg.Done()
+	interval := e.cfg.StaleAfter / 3
+	if interval <= 0 {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stale, err := e.staleNodeIDs()
+			if err != nil || len(stale) == 0 {
+				continue
+			}
+			e.sendHellos()
+			e.broadcastStartup()
+		}
+	}
+}
+
+func (e *Engine) staleNodeIDs() ([]identity.NodeID, error) {
+	nodes, err := e.cfg.Registry.Nodes()
+	if err != nil {
+		return nil, err
+	}
+	var stale []identity.NodeID
+	for _, n := range nodes {
+		if n.Status == registry.NodeStatusStale {
+			stale = append(stale, n.NodeID)
+		}
+	}
+	return stale, nil
 }
 
 func (e *Engine) staleSweepLoop(ctx context.Context) {
