@@ -394,6 +394,7 @@ Built on the SDK as both working software and proof that the base layer is usabl
 | **10** | **App SDK and local daemon API** — Android foreground-service IPC surface; Kotlin/Go SDK; app presence reporting; `DiscoverPeers`; App Stats view in Monitor |
 | **11** | **Ban list and Hub governance** — gossip proposal/verdict records; Ban List management UI in Monitor (Agree/Disagree, agree-tally); local enforcement |
 | **12** | **Reference apps** — private messaging and discussion-board app built on the SDK; end-to-end proof that the base layer is sufficient for third-party developers |
+| **13** | **SOS beacon reference app** — urgent location-tagged broadcast via `Publish`/`Subscribe`; Android one-tap test beacon; clearer developer onboarding for binding the Go core |
 
 Each phase should be runnable and demoable before moving to the next.
 

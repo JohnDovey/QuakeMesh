@@ -40,6 +40,13 @@
         android:layout_marginTop="12dp"
         android:text="@string/sdk_demo_button" />
 
+    <Button
+        android:id="@+id/sos_demo_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/sos_demo_button" />
+
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

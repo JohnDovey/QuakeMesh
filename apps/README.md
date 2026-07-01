@@ -6,6 +6,7 @@ Third-party apps built only on the mesh-sdk — no wire-protocol access required
 |-----|--------|-------------|
 | [privatechat](privatechat/) | `net.quakemesh.privatechat` | `Send` / `Receive`, `DiscoverPeers` |
 | [discuss](discuss/) | `net.quakemesh.discuss` | `Publish` / `Subscribe` |
+| [sosbeacon](sosbeacon/) | `net.quakemesh.sosbeacon` | urgent `Publish` / `Subscribe` with location |
 
 ## Prerequisites
 
@@ -30,6 +31,16 @@ go run ./apps/discuss -topic general -listen
 
 # Terminal B — post
 go run ./apps/discuss -topic general -post "mesh bulletin test"
+```
+
+## SOS beacon
+
+```bash
+# Terminal A — listen for SOS alerts
+go run ./apps/sosbeacon -listen
+
+# Terminal B — broadcast (optionally with GPS)
+go run ./apps/sosbeacon -text "injured, need help" -lat -36.85 -lon 174.76 -acc 12
 ```
 
 ## Full SDK smoke test

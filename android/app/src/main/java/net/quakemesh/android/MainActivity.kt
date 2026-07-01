@@ -4,6 +4,7 @@
 //   0.0.5 - Phase 4: mesh start/stop UI wired to foreground service.
 //   0.0.10 - Phase 8: show GPS fix when mesh is running.
 //   0.0.14 - Phase 12: SDK reference demo button.
+//   0.0.15 - Phase 13: SOS beacon test button.
 
 package net.quakemesh.android
 
@@ -17,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import net.quakemesh.android.demo.ReferenceSdkDemo
+import net.quakemesh.android.demo.SosBeaconDemo
 import net.quakemesh.android.mesh.MeshEngine
 import kotlin.concurrent.thread
 
@@ -26,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var nodeIdView: TextView
     private lateinit var toggleButton: Button
     private lateinit var sdkDemoButton: Button
+    private lateinit var sosButton: Button
 
     private var meshRunning = false
 
@@ -43,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         nodeIdView = findViewById(R.id.node_id_text)
         toggleButton = findViewById(R.id.toggle_mesh_button)
         sdkDemoButton = findViewById(R.id.sdk_demo_button)
+        sosButton = findViewById(R.id.sos_demo_button)
 
         MeshEngine.statusListener = { msg ->
             runOnUiThread {
@@ -80,6 +84,32 @@ class MainActivity : AppCompatActivity() {
                     sdkDemoButton.isEnabled = true
                     if (ok) {
                         lines.append(getString(R.string.sdk_demo_ok))
+                        statusView.text = lines.toString()
+                    }
+                }
+            }
+        }
+
+        sosButton.setOnClickListener {
+            if (!meshRunning) {
+                statusView.text = getString(R.string.sos_mesh_required)
+                return@setOnClickListener
+            }
+            sosButton.isEnabled = false
+            statusView.text = getString(R.string.sos_sending)
+            thread(name = "SosBeacon") {
+                val lines = StringBuilder()
+                val ok = SosBeaconDemo.send(
+                    getString(R.string.sos_test_message),
+                    MeshEngine.latestLocation(),
+                ) { line ->
+                    lines.append(line).append('\n')
+                    runOnUiThread { statusView.text = lines.toString() }
+                }
+                runOnUiThread {
+                    sosButton.isEnabled = true
+                    if (ok) {
+                        lines.append(getString(R.string.sos_sent_ok))
                         statusView.text = lines.toString()
                     }
                 }

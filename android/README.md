@@ -22,12 +22,18 @@ gomobile-generated `.aar` bindings.
 ```sh
 source /Volumes/JohnDovey/source-john-dovey.sh   # or ~/source-john-dovey.sh
 
-# Optional: bind Go core (needs NDK under $ANDROID_HOME/ndk)
-./gomobile-bind.sh
+# Optional: bind the real Go mesh core (skip for emulator / SDK-only testing)
+# Run these commands in a terminal on your Mac, from this directory:
+#   cd /path/to/QuakeMesh/android
+#   ./gomobile-bind.sh
+# Requires: Go, Android NDK (via Android Studio → SDK Manager → NDK).
+# Output: app/libs/meshcore.aar
 
 ./android-build.sh                # :app:assembleDebug
 ./android-build.sh :app:installDebug
 ```
+
+Without `meshcore.aar`, the app uses **StubMeshNode** — enough for SDK demos and the loopback API on port 18084. Bind the Go core only when you need the full crypto/routing stack on a physical device.
 
 Tap **Start mesh** in the app. A foreground notification appears while LAN/BLE/Wi-Fi transports are active.
 

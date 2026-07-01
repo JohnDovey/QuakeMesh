@@ -55,6 +55,8 @@ object MeshEngine {
 
     fun nodeId(): String? = node?.nodeId
 
+    fun latestLocation(): LocationReporter.LocationFix? = locationReporter?.latestFix()
+
     fun locationSummary(): String? {
         val fix = locationReporter?.latestFix() ?: return null
         return String.format("%.5f, %.5f (±%.0f m)", fix.lat, fix.lon, fix.accuracyM)

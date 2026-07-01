@@ -6,9 +6,14 @@
     <string name="mesh_stopped">Mesh stopped</string>
     <string name="node_id_label">Node ID: %1$s</string>
     <string name="node_id_unknown">Node ID: (start mesh)</string>
-    <string name="phase4_hint">Participating in the mesh keeps a foreground notification visible and uses LAN, BLE, and Wi-Fi Direct transports when available. Run ./gomobile-bind.sh after installing the Android NDK to bind the Go core.</string>
+    <string name="phase4_hint">Optional: bind the Go mesh core on your dev machine (see android/README.md). Without it the app uses a lightweight stub node — fine for SDK demos on the emulator.</string>
     <string name="sdk_demo_button">SDK demo (Phase 12)</string>
     <string name="sdk_demo_mesh_required">Start the mesh before running the SDK demo.</string>
     <string name="sdk_demo_running">Running SDK demo…</string>
     <string name="sdk_demo_ok">SDK demo passed.</string>
+    <string name="sos_demo_button">Send test SOS (Phase 13)</string>
+    <string name="sos_mesh_required">Start the mesh before sending an SOS test.</string>
+    <string name="sos_sending">Sending SOS test…</string>
+    <string name="sos_sent_ok">SOS test published.</string>
+    <string name="sos_test_message">Test SOS — QuakeMesh demo beacon</string>
 </resources>
