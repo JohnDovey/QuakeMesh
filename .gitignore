@@ -10,6 +10,7 @@
 # Android / Kotlin
 *.iml
 .gradle/
+.kotlin/
 local.properties
 .idea/
 .DS_Store
@@ -29,3 +30,5 @@ captures/
 .claude/
 *.identity
 quakemeshhub.db
+*.db-shm
+*.db-wal

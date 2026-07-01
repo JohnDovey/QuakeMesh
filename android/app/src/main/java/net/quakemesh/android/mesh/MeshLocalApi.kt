@@ -19,7 +19,7 @@ import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /**
- * Minimal loopback HTTP server exposing the same /v1/* API as QuakeMeshHub's
+ * Minimal loopback HTTP server exposing the same v1 REST API as QuakeMeshHub's
  * mesh-sdk daemon. Third-party apps connect via [net.quakemesh.sdk.HttpMeshClient].
  */
 object MeshLocalApi {
