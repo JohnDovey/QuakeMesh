@@ -3,6 +3,10 @@
 // Changelog:
 //   0.0.2 - Initial Phase 1 schema: all tables from "Storage - SQLite
 //           Everywhere" in /plan.md.
+//   0.0.3 - migration2: node_registry.pubkey is now nullable. Phase 2's
+//           OGM exchange learns of a peer's NodeID (a pubkey hash) long
+//           before it learns the actual pubkey bytes, so the column can
+//           no longer be NOT NULL.
 
 package storage
 
@@ -11,6 +15,7 @@ package storage
 // append a new one instead.
 var Migrations = []Migration{
 	{Version: 1, SQL: migration1},
+	{Version: 2, SQL: migration2},
 }
 
 // migration1 creates every table listed in "Storage - SQLite Everywhere"
@@ -127,4 +132,23 @@ CREATE TABLE config (
 	key   TEXT PRIMARY KEY,
 	value TEXT NOT NULL
 );
+`
+
+// migration2 rebuilds node_registry with a nullable pubkey column.
+// SQLite has no ALTER COLUMN, so the standard rebuild pattern is used:
+// create the new shape, copy the data across, drop the old table, rename.
+const migration2 = `
+CREATE TABLE node_registry_v2 (
+	node_id     BLOB PRIMARY KEY,
+	pubkey      BLOB,
+	first_seen  INTEGER NOT NULL,
+	last_seen   INTEGER NOT NULL,
+	last_lat    REAL,
+	last_lon    REAL,
+	status      TEXT NOT NULL
+);
+INSERT INTO node_registry_v2 (node_id, pubkey, first_seen, last_seen, last_lat, last_lon, status)
+	SELECT node_id, pubkey, first_seen, last_seen, last_lat, last_lon, status FROM node_registry;
+DROP TABLE node_registry;
+ALTER TABLE node_registry_v2 RENAME TO node_registry;
 `

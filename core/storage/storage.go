@@ -4,6 +4,15 @@
 //   0.0.1 - Initial scaffold.
 //   0.0.2 - Implemented Open, migration runner (PRAGMA user_version
 //           based), and the Phase 1 schema.
+//   0.0.3 - Enable WAL journal mode and a busy timeout, and pin the
+//           connection pool to a single connection. Hub's Phase 2 OGM
+//           engine writes from multiple goroutines (the receive loop
+//           and the stale-sweep loop) concurrently; database/sql opens
+//           new pooled connections on demand, and a PRAGMA set via Exec
+//           only takes effect on the one connection it ran on -- so
+//           without pinning the pool to size 1, most connections never
+//           saw busy_timeout and SQLite returned SQLITE_BUSY immediately
+//           on writer-vs-writer contention instead of waiting briefly.
 
 // Package storage holds the shared SQLite schema and migrations used by
 // both QuakeMeshHub and QuakeMesh Android (modernc.org/sqlite -- pure
@@ -37,9 +46,20 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: open %s: %w", path, err)
 	}
-	if _, err := sqlDB.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		sqlDB.Close()
-		return nil, fmt.Errorf("storage: enable foreign keys: %w", err)
+	// A single physical connection: SQLite only ever allows one writer
+	// at a time anyway, and this guarantees every PRAGMA set below
+	// actually applies to every operation instead of just whichever
+	// pooled connection happened to run the Exec call.
+	sqlDB.SetMaxOpenConns(1)
+	for _, pragma := range []string{
+		"PRAGMA foreign_keys = ON",
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA busy_timeout = 5000",
+	} {
+		if _, err := sqlDB.Exec(pragma); err != nil {
+			sqlDB.Close()
+			return nil, fmt.Errorf("storage: %s: %w", pragma, err)
+		}
 	}
 	db := &DB{sqlDB}
 	if err := db.migrate(); err != nil {

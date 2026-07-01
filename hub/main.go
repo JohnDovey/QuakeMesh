@@ -2,26 +2,75 @@
 //
 // Changelog:
 //   0.0.1 - Initial scaffold.
+//   0.0.3 - Phase 2: CLI flags wired into hubapp.Hub; runs the OGM
+//           engine and loopback management API until SIGINT/SIGTERM.
 
 // Command quakemeshhub is the stable-backbone binary: registry, routing,
 // NAT relay, and Hub-to-Hub sync. See "Project Names" in /plan.md.
 //
-// Not yet implemented (Phase 2). This is a scaffold placeholder.
+// Phase 2 scope: SQLite-backed registry, direct single-hop OGM routing
+// over UDP against a statically configured peer list, and the loopback
+// management API's /ws event stream. Multi-hop rebroadcast, Hub-to-Hub
+// gossip sync, and relay hub propagation are later phases.
 package main
 
 import (
+	"flag"
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 
-	"github.com/JohnDovey/QuakeMesh/core/transport"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/hubapp"
 )
 
-// loopbackManagementAddr is the Hub's local-only management API address,
-// consumed by QuakeMeshMonitor (see /monitor).
-const loopbackManagementAddr = "127.0.0.1:8083"
-
-var _ transport.Transport // referenced to confirm /core is wired up
-
 func main() {
-	fmt.Println("quakemeshhub", Version, "- scaffold only, not yet implemented (Phase 2)")
-	fmt.Println("loopback management API will listen on", loopbackManagementAddr)
+	cfg := hubapp.DefaultConfig()
+
+	var peers string
+	flag.StringVar(&cfg.IdentityPath, "identity", "quakemeshhub.identity", "path to this hub's Ed25519 seed file (created on first run)")
+	flag.StringVar(&cfg.DBPath, "db", "quakemeshhub.db", "path to the SQLite registry database")
+	flag.StringVar(&cfg.OGMBindAddr, "ogm-addr", "0.0.0.0:47222", "UDP address to send/receive OGMs on")
+	flag.StringVar(&peers, "peers", "", "comma-separated list of other hubs' OGM UDP addresses (host:port)")
+	flag.StringVar(&cfg.ManagementAddr, "management-addr", loopbackManagementAddr, "loopback management API bind address")
+	flag.DurationVar(&cfg.OGMInterval, "ogm-interval", cfg.OGMInterval, "how often to broadcast an OGM to configured peers")
+	flag.DurationVar(&cfg.StaleAfter, "stale-after", cfg.StaleAfter, "mark a peer stale after this long without a received OGM")
+	flag.Parse()
+
+	if peers != "" {
+		for _, p := range strings.Split(peers, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				cfg.Peers = append(cfg.Peers, p)
+			}
+		}
+	}
+
+	fmt.Printf("quakemeshhub %s\n", Version)
+
+	hub, err := hubapp.New(cfg)
+	if err != nil {
+		log.Fatalf("quakemeshhub: %v", err)
+	}
+	fmt.Printf("node id: %s\n", hub.Identity.NodeID)
+
+	if err := hub.Start(); err != nil {
+		log.Fatalf("quakemeshhub: %v", err)
+	}
+	fmt.Printf("OGM engine listening on %s (peers: %v)\n", cfg.OGMBindAddr, cfg.Peers)
+	fmt.Printf("management API listening on %s\n", cfg.ManagementAddr)
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	fmt.Println("shutting down...")
+	if err := hub.Close(); err != nil {
+		log.Printf("quakemeshhub: shutdown: %v", err)
+	}
 }
+
+// loopbackManagementAddr is the Hub's default local-only management API
+// address, consumed by QuakeMeshMonitor (see /monitor).
+const loopbackManagementAddr = "127.0.0.1:8083"
