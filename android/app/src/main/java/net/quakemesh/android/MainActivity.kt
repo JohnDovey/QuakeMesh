@@ -68,7 +68,7 @@ class MainActivity : AppCompatActivity() {
                 requestPermissionsIfNeeded()
                 val hubUrl = hubUrlField.text.toString().trim()
                 prefs.edit().putString(PREF_HUB_URL, hubUrl).apply()
-                MeshEngine.hubHeartbeatUrl = hubUrl
+                MeshEngine.prepareStart(hubUrl)
                 MeshForegroundService.start(this)
                 meshRunning = true
             }

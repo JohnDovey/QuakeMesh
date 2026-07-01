@@ -21,7 +21,7 @@ runs alongside a QuakeMeshHub. See "QuakeMeshMonitor" in [/plan.md](../plan.md).
 Start a Hub first, then the Monitor pointing at the same database:
 
 ```sh
-# terminal 1 — heartbeat on :18085 lets Android nodes report in
+# terminal 1 — LAN discovery + heartbeat let Android nodes auto-register
 cd hub && go run . -db /tmp/quakemeshhub.db
 
 # terminal 2

@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.5 - Phase 4: coordinates mesh node + platform transports.
 //   0.0.10 - Phase 8: LocationReporter for GPS sampling.
+//   0.0.18 - LAN hub auto-discovery + optional manual heartbeat URL.
 
 package net.quakemesh.android.mesh
 
@@ -20,8 +21,17 @@ object MeshEngine {
     private var locationReporter: LocationReporter? = null
     private var presenceReporter: MeshPresenceReporter? = null
 
-  var statusListener: ((String) -> Unit)? = null
-  var hubHeartbeatUrl: String = ""
+    var statusListener: ((String) -> Unit)? = null
+    var hubHeartbeatUrl: String = ""
+    var hubManualOverride: Boolean = false
+    var discoveredHubUrl: String = ""
+        private set
+
+    fun prepareStart(manualHubUrl: String) {
+        hubManualOverride = manualHubUrl.isNotBlank()
+        hubHeartbeatUrl = manualHubUrl
+        discoveredHubUrl = ""
+    }
 
     fun start(context: Context) {
         if (node != null) return
@@ -34,19 +44,27 @@ object MeshEngine {
                 transports.forEach { it.send(peer, frame) }
             }
         }
-        val lan = LanUdpTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
+        val lan = LanUdpTransport(
+            context,
+            nodeIdHex = { node?.nodeId },
+            location = {
+                locationReporter?.latestFix()?.let { Triple(it.lat, it.lon, it.accuracyM) }
+            },
+            onHubDiscovered = { url -> onHubDiscovered(url) },
+        ) { peer, frame -> n.onFrameReceived(peer, frame) }
         val ble = BleTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
         val wifi = WifiMeshTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
         listOf(lan, ble, wifi).forEach {
             transports.add(it)
             it.start()
         }
-        if (hubHeartbeatUrl.isNotBlank()) {
-            presenceReporter = MeshPresenceReporter(n.nodeId, hubHeartbeatUrl) {
-                locationReporter?.latestFix()
-            }.also { it.start() }
+        startPresenceReporter()
+        val hubNote = when {
+            hubHeartbeatUrl.isNotBlank() && hubManualOverride -> " (manual hub URL)"
+            hubHeartbeatUrl.isNotBlank() -> " (hub $hubHeartbeatUrl)"
+            else -> " (discovering hub on LAN…)"
         }
-        statusListener?.invoke("Mesh running — node ${n.nodeId.take(12)}…")
+        statusListener?.invoke("Mesh running — node ${n.nodeId.take(12)}…$hubNote")
     }
 
     fun stop() {
@@ -59,6 +77,7 @@ object MeshEngine {
         transports.clear()
         node?.close()
         node = null
+        discoveredHubUrl = ""
         statusListener?.invoke("Mesh stopped")
     }
 
@@ -73,5 +92,25 @@ object MeshEngine {
 
     internal fun dispatchOutbound(peerHex: String, frame: ByteArray) {
         transports.forEach { it.send(peerHex, frame) }
+    }
+
+    private fun onHubDiscovered(url: String) {
+        if (hubManualOverride && hubHeartbeatUrl.isNotBlank()) return
+        if (url == discoveredHubUrl && hubHeartbeatUrl == url) return
+        discoveredHubUrl = url
+        hubHeartbeatUrl = url
+        startPresenceReporter()
+        val base = "Hub discovered at $url"
+        val loc = locationSummary()
+        statusListener?.invoke(if (loc != null) "$base\nGPS: $loc" else base)
+    }
+
+    private fun startPresenceReporter() {
+        val n = node ?: return
+        if (hubHeartbeatUrl.isBlank()) return
+        presenceReporter?.stop()
+        presenceReporter = MeshPresenceReporter(n.nodeId, hubHeartbeatUrl) {
+            locationReporter?.latestFix()
+        }.also { it.start() }
     }
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/hub/internal/daemonapi"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/dtnengine"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/fallback"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/landiscovery"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/managementapi"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/nodeheartbeat"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/ogmengine"
@@ -48,7 +49,7 @@ type Config struct {
 	// "0.0.0.0:47222".
 	OGMBindAddr string
 	// Peers is the static list of other hubs' OGM UDP addresses.
-	// Automatic LAN discovery is a later phase.
+	// LAN multicast discovery supplements this list for mesh nodes.
 	Peers []string
 	// OGMInterval is how often this hub broadcasts an OGM.
 	OGMInterval time.Duration
@@ -73,6 +74,9 @@ type Config struct {
 	// HeartbeatAddr is the LAN HTTP bind address for mesh node presence
 	// reports (e.g. "0.0.0.0:18085"). Empty disables.
 	HeartbeatAddr string
+	// DiscoveryBind is the UDP bind for LAN multicast beacons (e.g.
+	// "0.0.0.0:47223"). Empty disables.
+	DiscoveryBind string
 }
 
 // DefaultConfig returns sensible defaults for the tuning parameters.
@@ -88,6 +92,7 @@ func DefaultConfig() Config {
 		SyncInterval: 30 * time.Second,
 		AppSocket:    "unix:/tmp/quakemeshhub.sock",
 		HeartbeatAddr: "0.0.0.0:18085",
+		DiscoveryBind: "0.0.0.0:47223",
 	}
 }
 
@@ -105,6 +110,7 @@ type Hub struct {
 	API      *managementapi.Server
 	Daemon   *daemonapi.Server
 	Heartbeat *nodeheartbeat.Server
+	Discovery *landiscovery.Engine
 }
 
 // New loads or creates this hub's identity, opens (and migrates) its
@@ -192,10 +198,24 @@ func New(cfg Config) (*Hub, error) {
 		})
 	}
 
+	heartbeatPort, _ := portFromAddr(cfg.HeartbeatAddr)
+	ogmPort, _ := portFromAddr(cfg.OGMBindAddr)
+	var discovery *landiscovery.Engine
+	if cfg.DiscoveryBind != "" && heartbeatPort > 0 && ogmPort > 0 {
+		discovery = landiscovery.New(landiscovery.Config{
+			BindAddr:      cfg.DiscoveryBind,
+			HubNodeID:     id.NodeID,
+			HeartbeatPort: heartbeatPort,
+			OGMPort:       ogmPort,
+			Registry:      reg,
+			Notifier:      events,
+		})
+	}
+
 	return &Hub{
 		cfg: cfg, Identity: id, DB: db, Registry: reg,
 		OGM: ogm, DTN: dtnEng, Sync: syncEng, Fallback: fallbackEng, API: api, Daemon: daemon,
-		Heartbeat: heartbeat,
+		Heartbeat: heartbeat, Discovery: discovery,
 	}, nil
 }
 
@@ -218,6 +238,18 @@ func (h *Hub) Start() error {
 			}
 			h.API.Close()
 			return fmt.Errorf("hubapp: start node heartbeat: %w", err)
+		}
+	}
+	if h.Discovery != nil {
+		if err := h.Discovery.Start(); err != nil {
+			if h.Heartbeat != nil {
+				h.Heartbeat.Close()
+			}
+			if h.Daemon != nil {
+				h.Daemon.Close()
+			}
+			h.API.Close()
+			return fmt.Errorf("hubapp: start LAN discovery: %w", err)
 		}
 	}
 	h.DTN.Start()
@@ -266,6 +298,21 @@ func (h *Hub) registerSelfHub() error {
 	return nil
 }
 
+func portFromAddr(addr string) (int, error) {
+	if addr == "" {
+		return 0, nil
+	}
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 0, err
+	}
+	var port int
+	if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+		return 0, err
+	}
+	return port, nil
+}
+
 func signPendingProposals(id *identity.Identity, bans *banlist.Store) error {
 	pending, err := bans.ListUnsignedByProposer(id.NodeID)
 	if err != nil {
@@ -293,7 +340,11 @@ func (h *Hub) Close() error {
 	if h.Heartbeat != nil {
 		heartbeatErr = h.Heartbeat.Close()
 	}
-	return errors.Join(h.Sync.Close(), h.OGM.Close(), daemonErr, heartbeatErr, h.API.Close(), h.DB.Close())
+	var discoveryErr error
+	if h.Discovery != nil {
+		discoveryErr = h.Discovery.Close()
+	}
+	return errors.Join(h.Sync.Close(), h.OGM.Close(), daemonErr, heartbeatErr, discoveryErr, h.API.Close(), h.DB.Close())
 }
 
 type eventBridge struct {

@@ -110,16 +110,10 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	copy(nodeID[:], idBytes)
 
 	now := time.Now()
-	changed, err := s.cfg.Registry.UpsertSeen(nodeID, now)
+	_, err = RegisterPresence(s.cfg.Registry, s.cfg.Notifier, nodeID, body.Lat, body.Lon, now)
 	if err != nil {
 		http.Error(w, "registry failed", http.StatusInternalServerError)
 		return
-	}
-	if body.Lat != nil && body.Lon != nil {
-		_ = s.cfg.Registry.UpdateLocation(nodeID, *body.Lat, *body.Lon, now)
-	}
-	if changed && s.cfg.Notifier != nil {
-		s.cfg.Notifier.NodeStatusChanged(nodeID, registry.NodeStatusOnline)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})

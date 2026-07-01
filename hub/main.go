@@ -41,6 +41,7 @@ func main() {
 	flag.DurationVar(&cfg.DTNTTL, "dtn-ttl", cfg.DTNTTL, "default TTL for queued DTN bundles")
 	flag.StringVar(&cfg.AppSocket, "app-socket", cfg.AppSocket, "mesh-sdk daemon listen address (unix:/path or tcp:host:port; empty disables)")
 	flag.StringVar(&cfg.HeartbeatAddr, "heartbeat-addr", cfg.HeartbeatAddr, "LAN HTTP bind for mesh node heartbeats (host:port; empty disables)")
+	flag.StringVar(&cfg.DiscoveryBind, "discovery-bind", cfg.DiscoveryBind, "LAN UDP bind for multicast hub/node beacons (host:port; empty disables)")
 	flag.Parse()
 
 	if peers != "" {
@@ -66,6 +67,12 @@ func main() {
 	fmt.Printf("management API listening on %s\n", cfg.ManagementAddr)
 	if cfg.AppSocket != "" {
 		fmt.Printf("app SDK daemon listening on %s\n", cfg.AppSocket)
+	}
+	if cfg.DiscoveryBind != "" {
+		fmt.Printf("LAN discovery beacons on %s (multicast %s:%d)\n", cfg.DiscoveryBind, "239.255.42.99", 47223)
+	}
+	if cfg.HeartbeatAddr != "" {
+		fmt.Printf("node heartbeat API listening on %s\n", cfg.HeartbeatAddr)
 	}
 
 	stop := make(chan os.Signal, 1)

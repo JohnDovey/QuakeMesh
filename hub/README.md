@@ -15,8 +15,19 @@ identity, routing, and storage.
 ## Run
 
 ```sh
-go run . -ogm-addr=0.0.0.0:47222 -peers=127.0.0.1:47223 -management-addr=127.0.0.1:8083
+go run . -db /tmp/quakemeshhub.db
 ```
+
+By default the hub listens for:
+
+- OGM routing on `0.0.0.0:47222`
+- LAN multicast discovery beacons on `0.0.0.0:47223` (`239.255.42.99:47223`)
+- mesh node heartbeat API on `0.0.0.0:18085`
+- Management API on `127.0.0.1:8083`
+
+Android nodes on the same Wi‑Fi discover the hub via multicast and register automatically; no manual IP entry required.
+
+Disable discovery with `-discovery-bind=` or heartbeats with `-heartbeat-addr=`.
 
 ## Tests
 
