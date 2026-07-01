@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/apppresence"
+	"github.com/JohnDovey/QuakeMesh/core/banlist"
 	"github.com/JohnDovey/QuakeMesh/core/dtn"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/metrics"
@@ -119,6 +120,7 @@ func New(cfg Config) (*Hub, error) {
 	cfgStore := configstore.New(db)
 	metricsStore := metrics.NewStore(db)
 	appStore := apppresence.NewStore(db)
+	banStore := banlist.NewStore(db)
 	dtnStore := dtn.NewStore(db)
 	trustStore := trust.NewStore(db)
 	dtnEng := dtnengine.New(dtnengine.Config{
@@ -135,6 +137,8 @@ func New(cfg Config) (*Hub, error) {
 			SelfID:     id.NodeID,
 			ListenAddr: cfg.AppSocket,
 			Apps:       appStore,
+			Bans:       banStore,
+			LocalHub:   id.NodeID,
 			Sender:     dtnEng,
 			Notifier:   api,
 		})
@@ -153,6 +157,12 @@ func New(cfg Config) (*Hub, error) {
 		Interval: cfg.SyncInterval,
 		Registry: reg,
 		Apps:     appStore,
+		Bans:     banStore,
+		LocalHub: id.NodeID,
+		SignPending: func() {
+			_ = signPendingProposals(id, banStore)
+		},
+		BanNotify: api,
 	})
 	ogm := ogmengine.New(ogmengine.Config{
 		SelfID:     id.NodeID,
@@ -209,6 +219,9 @@ func (h *Hub) Start() error {
 	if err := h.registerSelfHub(); err != nil {
 		return fmt.Errorf("hubapp: register self hub: %w", err)
 	}
+	if err := signPendingProposals(h.Identity, banlist.NewStore(h.DB)); err != nil {
+		return fmt.Errorf("hubapp: sign ban proposals: %w", err)
+	}
 	return nil
 }
 
@@ -223,6 +236,21 @@ func (h *Hub) registerSelfHub() error {
 	}
 	if changed {
 		h.API.HubStatusChanged(h.Identity.NodeID, registry.HubStatusOnline)
+	}
+	_ = configstore.New(h.DB).Set(configstore.KeyLocalHubID, h.Identity.NodeID.String())
+	return nil
+}
+
+func signPendingProposals(id *identity.Identity, bans *banlist.Store) error {
+	pending, err := bans.ListUnsignedByProposer(id.NodeID)
+	if err != nil {
+		return err
+	}
+	for _, p := range pending {
+		sig := id.Sign(banlist.SignBytes(p))
+		if err := bans.UpdateSignature(p.BanID, sig); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -152,6 +152,26 @@ func (s *Store) DiscoverPeers(appID, versionConstraint string) ([]identity.NodeI
 	return peers, nil
 }
 
+// Get returns one app_presence row for node/app, if present.
+func (s *Store) Get(nodeID identity.NodeID, appID string) (Record, bool, error) {
+	var appName, appVersion string
+	var reportedMs int64
+	err := s.db.QueryRow(
+		`SELECT app_name, app_version, last_reported FROM app_presence WHERE node_id = ? AND app_id = ?`,
+		nodeID[:], appID,
+	).Scan(&appName, &appVersion, &reportedMs)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Record{}, false, nil
+	}
+	if err != nil {
+		return Record{}, false, err
+	}
+	return Record{
+		NodeID: nodeID, AppID: appID, AppName: appName,
+		AppVersion: appVersion, LastReported: time.UnixMilli(reportedMs),
+	}, true, nil
+}
+
 // MergeGossip applies a last-writer-wins app_presence update from gossip.
 func (s *Store) MergeGossip(nodeID identity.NodeID, appID, appName, appVersion string, reportedAt time.Time) (bool, error) {
 	reportedMs := reportedAt.UnixMilli()

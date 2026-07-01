@@ -22,6 +22,8 @@ message ManagementEvent {
     HubStatusChanged hub_status_changed = 5;
     InternetFallbackChanged internet_fallback_changed = 6;
     AppPresenceChanged app_presence_changed = 7;
+    BanProposalChanged ban_proposal_changed = 8;
+    BanVerdictChanged ban_verdict_changed = 9;
   }
 }
 
@@ -54,4 +56,16 @@ message AppPresenceChanged {
   bytes node_id = 1;
   string app_id = 2;
   string app_version = 3;
+}
+
+message BanProposalChanged {
+  bytes ban_id = 1;
+  string app_id = 2;
+  string version_range = 3;
+}
+
+message BanVerdictChanged {
+  bytes ban_id = 1;
+  bytes hub_id = 2;
+  bool agree = 3;
 }

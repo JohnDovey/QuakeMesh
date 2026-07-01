@@ -78,6 +78,8 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/metrics/hop-latency", s.requireAuth(s.handleHopLatency))
 	mux.HandleFunc("/api/internet-fallback", s.requireAuth(s.handleInternetFallback))
 	mux.HandleFunc("/api/app-stats", s.requireAuth(s.handleAppStats))
+	mux.HandleFunc("/api/ban-list", s.requireAuth(s.handleBanList))
+	mux.HandleFunc("/api/ban-list/", s.requireAuth(s.handleBanListAction))
 	mux.HandleFunc("/ws", s.requireAuthWS(s.handleBrowserWS))
 	mux.Handle("/", s.handleStatic())
 
@@ -430,6 +432,57 @@ func (s *Server) handleInternetFallback(w http.ResponseWriter, r *http.Request) 
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleBanList(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		list, err := s.cfg.Data.BanList()
+		if err != nil {
+			http.Error(w, "ban list query failed", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, list)
+	case http.MethodPost:
+		var body struct {
+			AppID        string `json:"app_id"`
+			VersionRange string `json:"version_range"`
+			Reason       string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AppID == "" || body.Reason == "" {
+			http.Error(w, "app_id and reason required", http.StatusBadRequest)
+			return
+		}
+		entry, err := s.cfg.Data.ProposeBan(body.AppID, body.VersionRange, body.Reason)
+		if err != nil {
+			http.Error(w, "propose ban failed", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, entry)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleBanListAction(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/ban-list/")
+	parts := strings.Split(strings.Trim(rest, "/"), "/")
+	if len(parts) != 2 || parts[1] != "verdict" || r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	var body struct {
+		Agree bool `json:"agree"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := s.cfg.Data.SetBanVerdict(parts[0], body.Agree); err != nil {
+		http.Error(w, "verdict failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {

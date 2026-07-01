@@ -14,6 +14,7 @@ import (
 )
 
 const KeyInternetFallbackEnabled = "internet_fallback_enabled"
+const KeyLocalHubID = "local_hub_id"
 
 // Store reads and writes the config table.
 type Store struct {
@@ -23,6 +24,26 @@ type Store struct {
 // New wraps a migrated storage.DB.
 func New(db *storage.DB) *Store {
 	return &Store{db: db}
+}
+
+// Get returns the string value for key, or "" if unset.
+func (s *Store) Get(key string) (string, error) {
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM config WHERE key = ?`, key).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return value, err
+}
+
+// Set stores a string config value.
+func (s *Store) Set(key, value string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO config (key, value) VALUES (?, ?)
+		 ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		key, value,
+	)
+	return err
 }
 
 // GetBool returns the bool value for key, or defaultVal if unset.

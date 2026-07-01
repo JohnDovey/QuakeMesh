@@ -229,3 +229,31 @@ func (s *Server) AppPresenceChanged(nodeID identity.NodeID, appID, appVersion st
 		},
 	})
 }
+
+// BanProposalChanged notifies subscribers of a new or updated ban proposal.
+func (s *Server) BanProposalChanged(banID [16]byte, appID, versionRange string) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_BanProposalChanged{
+			BanProposalChanged: &wire.BanProposalChanged{
+				BanId:         banID[:],
+				AppId:         appID,
+				VersionRange:  versionRange,
+			},
+		},
+	})
+}
+
+// BanVerdictChanged notifies subscribers of a hub verdict on a ban.
+func (s *Server) BanVerdictChanged(banID [16]byte, hubID identity.NodeID, agree bool) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_BanVerdictChanged{
+			BanVerdictChanged: &wire.BanVerdictChanged{
+				BanId:  banID[:],
+				HubId:  hubID[:],
+				Agree:  agree,
+			},
+		},
+	})
+}

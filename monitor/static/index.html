@@ -20,6 +20,7 @@
       <a href="#trust" data-view="trust">Trust Scores</a>
       <a href="#hop-timing" data-view="hop-timing">Hop Timing</a>
       <a href="#apps" data-view="apps">App Stats</a>
+      <a href="#bans" data-view="bans">Ban List</a>
       <a href="#relay" data-view="relay">Relay Hubs</a>
       <a href="#" id="logout">Logout</a>
     </nav>
@@ -151,6 +152,37 @@
             <tr><th>App ID</th><th>Version</th><th>Nodes</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
           </thead>
           <tbody id="app-stats-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-bans" class="hidden">
+      <div class="panel">
+        <h2>Ban List</h2>
+        <p>Proposals are gossiped across hubs. Agreeing enforces locally — banned apps cannot register or appear in discovery on this hub.</p>
+        <form id="propose-ban" class="form-row">
+          <div>
+            <label for="ban-app-id">App ID</label>
+            <input id="ban-app-id" placeholder="net.example.badapp" required>
+          </div>
+          <div>
+            <label for="ban-version">Version range</label>
+            <input id="ban-version" placeholder="* or 1.*">
+          </div>
+          <div>
+            <label for="ban-reason">Reason</label>
+            <input id="ban-reason" placeholder="malware / policy" required>
+          </div>
+          <button type="submit">Propose ban</button>
+        </form>
+        <table>
+          <thead>
+            <tr>
+              <th>App ID</th><th>Versions</th><th>Reason</th><th>Agree</th><th>Disagree</th>
+              <th>Local</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ban-table"></tbody>
         </table>
       </div>
     </section>

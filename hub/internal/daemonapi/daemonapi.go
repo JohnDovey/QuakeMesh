@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/apppresence"
+	"github.com/JohnDovey/QuakeMesh/core/banlist"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 )
 
@@ -43,6 +44,8 @@ type Config struct {
 	SelfID     identity.NodeID
 	ListenAddr string // "unix:/path" or "tcp:127.0.0.1:8084"
 	Apps       *apppresence.Store
+	Bans       *banlist.Store
+	LocalHub   identity.NodeID
 	Sender     DTNSender
 	Notifier   PresenceNotifier
 }
@@ -155,6 +158,17 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AppID == "" {
 		http.Error(w, "app_id required", http.StatusBadRequest)
 		return
+	}
+	if s.cfg.Bans != nil {
+		blocked, err := s.cfg.Bans.IsLocallyEnforced(s.cfg.LocalHub, body.AppID, body.AppVersion)
+		if err != nil {
+			http.Error(w, "ban check failed", http.StatusInternalServerError)
+			return
+		}
+		if blocked {
+			http.Error(w, "app is banned on this hub", http.StatusForbidden)
+			return
+		}
 	}
 	token, err := newToken()
 	if err != nil {
@@ -352,6 +366,18 @@ func (s *Server) handleDiscoverPeers(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]string, 0, len(peers))
 	for _, p := range peers {
+		if s.cfg.Bans != nil {
+			rec, ok, err := s.cfg.Apps.Get(p, appID)
+			if err != nil {
+				continue
+			}
+			if ok {
+				blocked, err := s.cfg.Bans.IsLocallyEnforced(s.cfg.LocalHub, appID, rec.AppVersion)
+				if err != nil || blocked {
+					continue
+				}
+			}
+		}
 		out = append(out, p.String())
 	}
 	writeJSON(w, map[string][]string{"peers": out})

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/JohnDovey/QuakeMesh/core/apppresence"
+	"github.com/JohnDovey/QuakeMesh/core/banlist"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/wire"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
@@ -30,6 +31,15 @@ type Config struct {
 	Interval time.Duration
 	Registry *registry.Registry
 	Apps     *apppresence.Store
+	Bans     *banlist.Store
+	LocalHub identity.NodeID
+	// SignPending is called before each gossip round (e.g. sign Monitor proposals).
+	SignPending func()
+	// BanNotify receives gossip-merged ban updates for management events.
+	BanNotify interface {
+		BanProposalChanged(banID [16]byte, appID, versionRange string)
+		BanVerdictChanged(banID [16]byte, hubID identity.NodeID, agree bool)
+	}
 }
 
 // Engine gossips registry state to peer hubs.
@@ -98,6 +108,9 @@ func (e *Engine) sendLoop(ctx context.Context) {
 }
 
 func (e *Engine) gossipOnce() {
+	if e.cfg.SignPending != nil {
+		e.cfg.SignPending()
+	}
 	msg, err := e.buildMessage()
 	if err != nil {
 		log.Printf("syncengine: build: %v", err)
@@ -156,12 +169,47 @@ func (e *Engine) buildMessage() (*wire.HubSyncMessage, error) {
 			return nil, err
 		}
 		for _, a := range apps {
+			if e.cfg.Bans != nil {
+				blocked, err := e.cfg.Bans.IsLocallyEnforced(e.cfg.LocalHub, a.AppID, a.AppVersion)
+				if err == nil && blocked {
+					continue
+				}
+			}
 			msg.AppPresence = append(msg.AppPresence, &wire.AppPresenceRecord{
 				NodeId:             a.NodeID[:],
 				AppId:              a.AppID,
 				AppName:            a.AppName,
 				AppVersion:         a.AppVersion,
 				LastReportedUnixMs: a.LastReported.UnixMilli(),
+			})
+		}
+	}
+	if e.cfg.Bans != nil {
+		proposals, err := e.cfg.Bans.ListProposals()
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range proposals {
+			msg.BanProposals = append(msg.BanProposals, &wire.BanProposal{
+				BanId:              p.BanID[:],
+				AppId:              p.AppID,
+				VersionRange:       p.VersionRange,
+				Reason:             p.Reason,
+				ProposedByHubId:    p.ProposedBy[:],
+				ProposedAtUnixMs:   p.ProposedAt.UnixMilli(),
+				Signature:          p.Signature,
+			})
+		}
+		verdicts, err := e.cfg.Bans.ListAllVerdicts()
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range verdicts {
+			msg.BanVerdicts = append(msg.BanVerdicts, &wire.BanVerdict{
+				BanId:           v.BanID[:],
+				HubId:           v.HubID[:],
+				Agree:           v.Agree,
+				DecidedAtUnixMs: v.DecidedAt.UnixMilli(),
 			})
 		}
 	}
@@ -246,6 +294,44 @@ func (e *Engine) apply(msg *wire.HubSyncMessage) {
 				time.UnixMilli(ap.LastReportedUnixMs),
 			); err != nil {
 				log.Printf("syncengine: merge app presence: %v", err)
+			}
+		}
+	}
+	if e.cfg.Bans != nil {
+		for _, bp := range msg.BanProposals {
+			if len(bp.BanId) != 16 {
+				continue
+			}
+			var banID [16]byte
+			copy(banID[:], bp.BanId)
+			var proposer identity.NodeID
+			copy(proposer[:], bp.ProposedByHubId)
+			p := banlist.Proposal{
+				BanID: banID, AppID: bp.AppId, VersionRange: bp.VersionRange,
+				Reason: bp.Reason, ProposedBy: proposer,
+				ProposedAt: time.UnixMilli(bp.ProposedAtUnixMs), Signature: bp.Signature,
+			}
+			if changed, err := e.cfg.Bans.MergeGossipProposal(p); err != nil {
+				log.Printf("syncengine: merge ban proposal: %v", err)
+			} else if changed && e.cfg.BanNotify != nil {
+				e.cfg.BanNotify.BanProposalChanged(banID, bp.AppId, bp.VersionRange)
+			}
+		}
+		for _, bv := range msg.BanVerdicts {
+			if len(bv.BanId) != 16 || len(bv.HubId) != len(identity.NodeID{}) {
+				continue
+			}
+			var banID [16]byte
+			copy(banID[:], bv.BanId)
+			var hubID identity.NodeID
+			copy(hubID[:], bv.HubId)
+			if changed, err := e.cfg.Bans.MergeGossipVerdict(banlist.Verdict{
+				BanID: banID, HubID: hubID, Agree: bv.Agree,
+				DecidedAt: time.UnixMilli(bv.DecidedAtUnixMs),
+			}); err != nil {
+				log.Printf("syncengine: merge ban verdict: %v", err)
+			} else if changed && e.cfg.BanNotify != nil {
+				e.cfg.BanNotify.BanVerdictChanged(banID, hubID, bv.Agree)
 			}
 		}
 	}

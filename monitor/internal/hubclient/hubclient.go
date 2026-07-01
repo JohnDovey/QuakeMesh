@@ -38,6 +38,8 @@ type Event struct {
 	Enabled         bool    `json:"enabled,omitempty"`
 	AppID           string  `json:"app_id,omitempty"`
 	AppVersion      string  `json:"app_version,omitempty"`
+	VersionRange    string  `json:"version_range,omitempty"`
+	Agree           bool    `json:"agree,omitempty"`
 }
 
 // Client subscribes to QuakeMeshHub's loopback /ws management stream.
@@ -192,6 +194,20 @@ func translateEvent(mgmt *wire.ManagementEvent) (Event, bool) {
 			NodeID:          nodeIDString(e.AppPresenceChanged.NodeId),
 			AppID:           e.AppPresenceChanged.AppId,
 			AppVersion:      e.AppPresenceChanged.AppVersion,
+		}, true
+	case *wire.ManagementEvent_BanProposalChanged:
+		return Event{
+			Type:            "ban_proposal_changed",
+			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
+			AppID:           e.BanProposalChanged.AppId,
+			VersionRange:    e.BanProposalChanged.VersionRange,
+		}, true
+	case *wire.ManagementEvent_BanVerdictChanged:
+		return Event{
+			Type:            "ban_verdict_changed",
+			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
+			HubID:           nodeIDString(e.BanVerdictChanged.HubId),
+			Agree:           e.BanVerdictChanged.Agree,
 		}, true
 	default:
 		return base, false

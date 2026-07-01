@@ -8,6 +8,7 @@
 //   0.0.10 - Orphan direction hints for stale nodes on the Node Map.
 //   0.0.11 - Hop latency history and internet-fallback config for Monitor.
 //   0.0.12 - App Stats from app_presence table.
+//   0.0.13 - Ban list proposals, verdicts, and local enforcement status.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/apppresence"
+	"github.com/JohnDovey/QuakeMesh/core/banlist"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/location"
 	"github.com/JohnDovey/QuakeMesh/core/metrics"
@@ -575,4 +577,125 @@ func (s *Store) AppStats() ([]AppStat, error) {
 		})
 	}
 	return out, nil
+}
+
+const configKeyLocalHubID = "local_hub_id"
+
+// BanEntry is a ban proposal with network-wide verdict tallies.
+type BanEntry struct {
+	BanID           string    `json:"ban_id"`
+	AppID           string    `json:"app_id"`
+	VersionRange    string    `json:"version_range"`
+	Reason          string    `json:"reason"`
+	ProposedBy      string    `json:"proposed_by"`
+	ProposedAt      time.Time `json:"proposed_at"`
+	AgreeCount      int       `json:"agree_count"`
+	DisagreeCount   int       `json:"disagree_count"`
+	LocalVerdict    string    `json:"local_verdict,omitempty"`
+	LocallyEnforced bool      `json:"locally_enforced"`
+}
+
+// LocalHubID returns this hub's node id from the config table.
+func (s *Store) LocalHubID() (identity.NodeID, error) {
+	var id identity.NodeID
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM config WHERE key = ?`, configKeyLocalHubID).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) || value == "" {
+		return id, fmt.Errorf("datastore: local hub id not set")
+	}
+	bytes, err := hex.DecodeString(value)
+	if err != nil || len(bytes) != len(id) {
+		return id, fmt.Errorf("datastore: invalid local hub id")
+	}
+	copy(id[:], bytes)
+	return id, nil
+}
+
+// BanList returns proposals with verdict tallies and local hub status.
+func (s *Store) BanList() ([]BanEntry, error) {
+	store := banlist.NewStore(s.db)
+	proposals, err := store.ListProposals()
+	if err != nil {
+		return nil, err
+	}
+	localHub, hasLocal := identity.NodeID{}, false
+	if id, err := s.LocalHubID(); err == nil {
+		localHub = id
+		hasLocal = true
+	}
+	entries := make([]BanEntry, 0, len(proposals))
+	for _, p := range proposals {
+		tally, err := store.TallyVerdicts(p.BanID)
+		if err != nil {
+			return nil, err
+		}
+		e := BanEntry{
+			BanID:         hex.EncodeToString(p.BanID[:]),
+			AppID:         p.AppID,
+			VersionRange:  p.VersionRange,
+			Reason:        p.Reason,
+			ProposedBy:    p.ProposedBy.String(),
+			ProposedAt:    p.ProposedAt,
+			AgreeCount:    tally.Agree,
+			DisagreeCount: tally.Disagree,
+		}
+		if hasLocal {
+			if v, ok, err := store.VerdictForHub(p.BanID, localHub); err == nil && ok {
+				if v.Agree {
+					e.LocalVerdict = "agree"
+					e.LocallyEnforced = true
+				} else {
+					e.LocalVerdict = "disagree"
+				}
+			}
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+// ProposeBan creates a new ban proposal from the local hub.
+func (s *Store) ProposeBan(appID, versionRange, reason string) (BanEntry, error) {
+	localHub, err := s.LocalHubID()
+	if err != nil {
+		return BanEntry{}, err
+	}
+	if versionRange == "" {
+		versionRange = "*"
+	}
+	p := banlist.Proposal{
+		AppID: appID, VersionRange: versionRange, Reason: reason,
+		ProposedBy: localHub, ProposedAt: time.Now(),
+	}
+	if err := banlist.NewStore(s.db).Propose(p); err != nil {
+		return BanEntry{}, err
+	}
+	list, err := s.BanList()
+	if err != nil {
+		return BanEntry{}, err
+	}
+	want := hex.EncodeToString(p.BanID[:])
+	for _, e := range list {
+		if e.BanID == want {
+			return e, nil
+		}
+	}
+	return BanEntry{BanID: want, AppID: appID, VersionRange: versionRange, Reason: reason}, nil
+}
+
+// SetBanVerdict records the local hub's agree/disagree on a ban.
+func (s *Store) SetBanVerdict(banIDHex string, agree bool) error {
+	localHub, err := s.LocalHubID()
+	if err != nil {
+		return err
+	}
+	idBytes, err := hex.DecodeString(banIDHex)
+	if err != nil || len(idBytes) != 16 {
+		return fmt.Errorf("datastore: invalid ban id")
+	}
+	var banID [16]byte
+	copy(banID[:], idBytes)
+	return banlist.NewStore(s.db).SetVerdict(banlist.Verdict{
+		BanID: banID, HubID: localHub, Agree: agree, DecidedAt: time.Now(),
+	})
 }

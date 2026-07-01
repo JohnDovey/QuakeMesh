@@ -519,6 +519,62 @@ async function loadAppStats() {
   }
 }
 
+async function loadBanList() {
+  const rows = await api('/api/ban-list') || [];
+  const tbody = document.getElementById('ban-table');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="7">No ban proposals.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const b of rows) {
+    const tr = document.createElement('tr');
+    const local = b.locally_enforced ? 'enforced' : (b.local_verdict || 'pending');
+    const cls = b.locally_enforced ? 'status-stale' : (b.local_verdict === 'agree' ? 'status-online' : '');
+    tr.innerHTML = `<td>${b.app_id}</td><td>${b.version_range}</td><td>${b.reason}</td>
+      <td>${b.agree_count}</td><td>${b.disagree_count}</td>
+      <td class="${cls}">${local}</td>
+      <td>
+        <button class="secondary ban-agree" data-id="${b.ban_id}">Agree</button>
+        <button class="danger ban-disagree" data-id="${b.ban_id}">Disagree</button>
+      </td>`;
+    tbody.appendChild(tr);
+  }
+  tbody.querySelectorAll('.ban-agree').forEach((btn) => {
+    btn.addEventListener('click', () => setBanVerdict(btn.dataset.id, true));
+  });
+  tbody.querySelectorAll('.ban-disagree').forEach((btn) => {
+    btn.addEventListener('click', () => setBanVerdict(btn.dataset.id, false));
+  });
+}
+
+async function setBanVerdict(id, agree) {
+  await api('/api/ban-list/' + id + '/verdict', {
+    method: 'POST',
+    body: JSON.stringify({ agree }),
+  });
+  await loadBanList();
+}
+
+document.getElementById('propose-ban')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await api('/api/ban-list', {
+    method: 'POST',
+    body: JSON.stringify({
+      app_id: document.getElementById('ban-app-id').value.trim(),
+      version_range: document.getElementById('ban-version').value.trim() || '*',
+      reason: document.getElementById('ban-reason').value.trim(),
+    }),
+  });
+  document.getElementById('ban-app-id').value = '';
+  document.getElementById('ban-version').value = '';
+  document.getElementById('ban-reason').value = '';
+  await loadBanList();
+});
+
 async function loadOverview() {
   const o = await api('/api/overview');
   if (o) applyOverview(o);
@@ -600,6 +656,9 @@ connectWS((ev) => {
   if (ev.type === 'app_presence_changed') {
     loadAppStats();
   }
+  if (ev.type === 'ban_proposal_changed' || ev.type === 'ban_verdict_changed') {
+    loadBanList();
+  }
 });
 
 (async function init() {
@@ -613,6 +672,7 @@ connectWS((ev) => {
     await loadRelayHubs();
     await loadInternetFallback();
     await loadAppStats();
+    await loadBanList();
   } catch (_) {
     window.location.href = '/login';
   }

@@ -39,6 +39,8 @@ type ManagementEvent struct {
 	//	*ManagementEvent_HubStatusChanged
 	//	*ManagementEvent_InternetFallbackChanged
 	//	*ManagementEvent_AppPresenceChanged
+	//	*ManagementEvent_BanProposalChanged
+	//	*ManagementEvent_BanVerdictChanged
 	Event         isManagementEvent_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -142,6 +144,24 @@ func (x *ManagementEvent) GetAppPresenceChanged() *AppPresenceChanged {
 	return nil
 }
 
+func (x *ManagementEvent) GetBanProposalChanged() *BanProposalChanged {
+	if x != nil {
+		if x, ok := x.Event.(*ManagementEvent_BanProposalChanged); ok {
+			return x.BanProposalChanged
+		}
+	}
+	return nil
+}
+
+func (x *ManagementEvent) GetBanVerdictChanged() *BanVerdictChanged {
+	if x != nil {
+		if x, ok := x.Event.(*ManagementEvent_BanVerdictChanged); ok {
+			return x.BanVerdictChanged
+		}
+	}
+	return nil
+}
+
 type isManagementEvent_Event interface {
 	isManagementEvent_Event()
 }
@@ -170,6 +190,14 @@ type ManagementEvent_AppPresenceChanged struct {
 	AppPresenceChanged *AppPresenceChanged `protobuf:"bytes,7,opt,name=app_presence_changed,json=appPresenceChanged,proto3,oneof"`
 }
 
+type ManagementEvent_BanProposalChanged struct {
+	BanProposalChanged *BanProposalChanged `protobuf:"bytes,8,opt,name=ban_proposal_changed,json=banProposalChanged,proto3,oneof"`
+}
+
+type ManagementEvent_BanVerdictChanged struct {
+	BanVerdictChanged *BanVerdictChanged `protobuf:"bytes,9,opt,name=ban_verdict_changed,json=banVerdictChanged,proto3,oneof"`
+}
+
 func (*ManagementEvent_NodeStatusChanged) isManagementEvent_Event() {}
 
 func (*ManagementEvent_RouteChanged) isManagementEvent_Event() {}
@@ -181,6 +209,10 @@ func (*ManagementEvent_HubStatusChanged) isManagementEvent_Event() {}
 func (*ManagementEvent_InternetFallbackChanged) isManagementEvent_Event() {}
 
 func (*ManagementEvent_AppPresenceChanged) isManagementEvent_Event() {}
+
+func (*ManagementEvent_BanProposalChanged) isManagementEvent_Event() {}
+
+func (*ManagementEvent_BanVerdictChanged) isManagementEvent_Event() {}
 
 type HubStatusChanged struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -502,11 +534,131 @@ func (x *AppPresenceChanged) GetAppVersion() string {
 	return ""
 }
 
+type BanProposalChanged struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BanId         []byte                 `protobuf:"bytes,1,opt,name=ban_id,json=banId,proto3" json:"ban_id,omitempty"`
+	AppId         string                 `protobuf:"bytes,2,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
+	VersionRange  string                 `protobuf:"bytes,3,opt,name=version_range,json=versionRange,proto3" json:"version_range,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BanProposalChanged) Reset() {
+	*x = BanProposalChanged{}
+	mi := &file_management_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BanProposalChanged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BanProposalChanged) ProtoMessage() {}
+
+func (x *BanProposalChanged) ProtoReflect() protoreflect.Message {
+	mi := &file_management_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BanProposalChanged.ProtoReflect.Descriptor instead.
+func (*BanProposalChanged) Descriptor() ([]byte, []int) {
+	return file_management_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *BanProposalChanged) GetBanId() []byte {
+	if x != nil {
+		return x.BanId
+	}
+	return nil
+}
+
+func (x *BanProposalChanged) GetAppId() string {
+	if x != nil {
+		return x.AppId
+	}
+	return ""
+}
+
+func (x *BanProposalChanged) GetVersionRange() string {
+	if x != nil {
+		return x.VersionRange
+	}
+	return ""
+}
+
+type BanVerdictChanged struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BanId         []byte                 `protobuf:"bytes,1,opt,name=ban_id,json=banId,proto3" json:"ban_id,omitempty"`
+	HubId         []byte                 `protobuf:"bytes,2,opt,name=hub_id,json=hubId,proto3" json:"hub_id,omitempty"`
+	Agree         bool                   `protobuf:"varint,3,opt,name=agree,proto3" json:"agree,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BanVerdictChanged) Reset() {
+	*x = BanVerdictChanged{}
+	mi := &file_management_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BanVerdictChanged) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BanVerdictChanged) ProtoMessage() {}
+
+func (x *BanVerdictChanged) ProtoReflect() protoreflect.Message {
+	mi := &file_management_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BanVerdictChanged.ProtoReflect.Descriptor instead.
+func (*BanVerdictChanged) Descriptor() ([]byte, []int) {
+	return file_management_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *BanVerdictChanged) GetBanId() []byte {
+	if x != nil {
+		return x.BanId
+	}
+	return nil
+}
+
+func (x *BanVerdictChanged) GetHubId() []byte {
+	if x != nil {
+		return x.HubId
+	}
+	return nil
+}
+
+func (x *BanVerdictChanged) GetAgree() bool {
+	if x != nil {
+		return x.Agree
+	}
+	return false
+}
+
 var File_management_proto protoreflect.FileDescriptor
 
 const file_management_proto_rawDesc = "" +
 	"\n" +
-	"\x10management.proto\x12\x0equakemesh.wire\"\xd1\x04\n" +
+	"\x10management.proto\x12\x0equakemesh.wire\"\xfe\x05\n" +
 	"\x0fManagementEvent\x12+\n" +
 	"\x12emitted_at_unix_ms\x18\x01 \x01(\x03R\x0femittedAtUnixMs\x12S\n" +
 	"\x13node_status_changed\x18\x02 \x01(\v2!.quakemesh.wire.NodeStatusChangedH\x00R\x11nodeStatusChanged\x12C\n" +
@@ -514,7 +666,9 @@ const file_management_proto_rawDesc = "" +
 	"\x17dtn_queue_depth_changed\x18\x04 \x01(\v2$.quakemesh.wire.DtnQueueDepthChangedH\x00R\x14dtnQueueDepthChanged\x12P\n" +
 	"\x12hub_status_changed\x18\x05 \x01(\v2 .quakemesh.wire.HubStatusChangedH\x00R\x10hubStatusChanged\x12e\n" +
 	"\x19internet_fallback_changed\x18\x06 \x01(\v2'.quakemesh.wire.InternetFallbackChangedH\x00R\x17internetFallbackChanged\x12V\n" +
-	"\x14app_presence_changed\x18\a \x01(\v2\".quakemesh.wire.AppPresenceChangedH\x00R\x12appPresenceChangedB\a\n" +
+	"\x14app_presence_changed\x18\a \x01(\v2\".quakemesh.wire.AppPresenceChangedH\x00R\x12appPresenceChanged\x12V\n" +
+	"\x14ban_proposal_changed\x18\b \x01(\v2\".quakemesh.wire.BanProposalChangedH\x00R\x12banProposalChanged\x12S\n" +
+	"\x13ban_verdict_changed\x18\t \x01(\v2!.quakemesh.wire.BanVerdictChangedH\x00R\x11banVerdictChangedB\a\n" +
 	"\x05event\"A\n" +
 	"\x10HubStatusChanged\x12\x15\n" +
 	"\x06hub_id\x18\x01 \x01(\fR\x05hubId\x12\x16\n" +
@@ -535,7 +689,15 @@ const file_management_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\fR\x06nodeId\x12\x15\n" +
 	"\x06app_id\x18\x02 \x01(\tR\x05appId\x12\x1f\n" +
 	"\vapp_version\x18\x03 \x01(\tR\n" +
-	"appVersionBE\n" +
+	"appVersion\"g\n" +
+	"\x12BanProposalChanged\x12\x15\n" +
+	"\x06ban_id\x18\x01 \x01(\fR\x05banId\x12\x15\n" +
+	"\x06app_id\x18\x02 \x01(\tR\x05appId\x12#\n" +
+	"\rversion_range\x18\x03 \x01(\tR\fversionRange\"W\n" +
+	"\x11BanVerdictChanged\x12\x15\n" +
+	"\x06ban_id\x18\x01 \x01(\fR\x05banId\x12\x15\n" +
+	"\x06hub_id\x18\x02 \x01(\fR\x05hubId\x12\x14\n" +
+	"\x05agree\x18\x03 \x01(\bR\x05agreeBE\n" +
 	"\x13net.quakemesh.protoZ.github.com/JohnDovey/QuakeMesh/proto/wire;wireb\x06proto3"
 
 var (
@@ -550,7 +712,7 @@ func file_management_proto_rawDescGZIP() []byte {
 	return file_management_proto_rawDescData
 }
 
-var file_management_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_management_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_management_proto_goTypes = []any{
 	(*ManagementEvent)(nil),         // 0: quakemesh.wire.ManagementEvent
 	(*HubStatusChanged)(nil),        // 1: quakemesh.wire.HubStatusChanged
@@ -559,6 +721,8 @@ var file_management_proto_goTypes = []any{
 	(*DtnQueueDepthChanged)(nil),    // 4: quakemesh.wire.DtnQueueDepthChanged
 	(*InternetFallbackChanged)(nil), // 5: quakemesh.wire.InternetFallbackChanged
 	(*AppPresenceChanged)(nil),      // 6: quakemesh.wire.AppPresenceChanged
+	(*BanProposalChanged)(nil),      // 7: quakemesh.wire.BanProposalChanged
+	(*BanVerdictChanged)(nil),       // 8: quakemesh.wire.BanVerdictChanged
 }
 var file_management_proto_depIdxs = []int32{
 	2, // 0: quakemesh.wire.ManagementEvent.node_status_changed:type_name -> quakemesh.wire.NodeStatusChanged
@@ -567,11 +731,13 @@ var file_management_proto_depIdxs = []int32{
 	1, // 3: quakemesh.wire.ManagementEvent.hub_status_changed:type_name -> quakemesh.wire.HubStatusChanged
 	5, // 4: quakemesh.wire.ManagementEvent.internet_fallback_changed:type_name -> quakemesh.wire.InternetFallbackChanged
 	6, // 5: quakemesh.wire.ManagementEvent.app_presence_changed:type_name -> quakemesh.wire.AppPresenceChanged
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7, // 6: quakemesh.wire.ManagementEvent.ban_proposal_changed:type_name -> quakemesh.wire.BanProposalChanged
+	8, // 7: quakemesh.wire.ManagementEvent.ban_verdict_changed:type_name -> quakemesh.wire.BanVerdictChanged
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_management_proto_init() }
@@ -586,6 +752,8 @@ func file_management_proto_init() {
 		(*ManagementEvent_HubStatusChanged)(nil),
 		(*ManagementEvent_InternetFallbackChanged)(nil),
 		(*ManagementEvent_AppPresenceChanged)(nil),
+		(*ManagementEvent_BanProposalChanged)(nil),
+		(*ManagementEvent_BanVerdictChanged)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -593,7 +761,7 @@ func file_management_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_management_proto_rawDesc), len(file_management_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
