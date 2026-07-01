@@ -2,6 +2,7 @@
 
 A self-contained, infrastructure-independent private mesh network. See
 [/plan.md](plan.md) for the full design and phased delivery roadmap.
+See also [/Philosophy.md](Philosophy.md) for why this project exists.
 
 ## Repository layout
 

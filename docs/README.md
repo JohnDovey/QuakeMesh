@@ -1,9 +1,9 @@
 # /docs
 
 Protocol spec, SQLite schema reference, and Monitor API spec. The
-authoritative design document for the whole project is [/plan.md](../plan.md)
-— these files will hold the detailed, implementation-facing specs as each
-phase lands.
+authoritative design document for the whole project is [/plan.md](../plan.md);
+[/Philosophy.md](../Philosophy.md) explains why it exists — these files will
+hold the detailed, implementation-facing specs as each phase lands.
 
 | File | Covers | Status |
 |---|---|---|
