@@ -1,0 +1,23 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// Store-and-forward bundle, following the store-carry-forward model
+// (Bundle Protocol / RFC 9171). Persisted in the dtq_queue SQLite table
+// until a route appears or it expires.
+message DtnBundle {
+  bytes bundle_id = 1;
+  bytes src_node_id = 2;
+  bytes dst_node_id = 3;
+  bytes payload = 4;
+  int64 expires_at_unix_ms = 5;
+  uint32 retry_count = 6;
+}

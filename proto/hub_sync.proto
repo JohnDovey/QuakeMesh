@@ -1,0 +1,38 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+import "relay_hub.proto";
+import "ban_list.proto";
+import "app_presence.proto";
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// Gossiped node registry record. Records merge last-writer-wins by
+// timestamp; self-attested fields carry the node's own signature and
+// hub-observed fields are attributed to the observing hub.
+message NodeRecord {
+  bytes node_id = 1;
+  int64 first_seen_unix_ms = 2;
+  int64 last_seen_unix_ms = 3;
+  double last_lat = 4;
+  double last_lon = 5;
+  string status = 6;
+  int32 trust_score = 7;
+}
+
+// One Hub-to-Hub gossip exchange payload.
+message HubSyncMessage {
+  bytes from_hub_id = 1;
+  repeated NodeRecord node_records = 2;
+  repeated RelayHubRecord relay_hubs = 3;
+  repeated AppPresenceRecord app_presence = 4;
+  repeated BanProposal ban_proposals = 5;
+  repeated BanVerdict ban_verdicts = 6;
+}

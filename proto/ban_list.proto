@@ -1,0 +1,31 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// A ban proposal is never auto-enforced -- every hub admin explicitly
+// Agrees or Disagrees, and both the proposal and every verdict are
+// gossiped so the network can see how many hubs enforced it.
+message BanProposal {
+  bytes ban_id = 1;
+  string app_id = 2;
+  string version_range = 3;
+  string reason = 4;
+  bytes proposed_by_hub_id = 5;
+  int64 proposed_at_unix_ms = 6;
+  bytes signature = 7;
+}
+
+message BanVerdict {
+  bytes ban_id = 1;
+  bytes hub_id = 2;
+  bool agree = 3;
+  int64 decided_at_unix_ms = 4;
+}

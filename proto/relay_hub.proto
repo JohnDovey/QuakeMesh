@@ -1,0 +1,20 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// A hub advertised as relay-capable (publicly reachable + relaying opt-in).
+message RelayHubRecord {
+  bytes hub_id = 1;
+  string ip = 2;
+  uint32 port = 3;
+  string source = 4; // "manual" | "gossip" | "client"
+  int64 last_verified_unix_ms = 5;
+}

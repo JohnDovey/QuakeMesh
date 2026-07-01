@@ -4,14 +4,16 @@
 *.test
 *.out
 vendor/
+/hub/hub
+/monitor/monitor
 
 # Android / Kotlin
 *.iml
 .gradle/
-/local.properties
-/.idea/
+local.properties
+.idea/
 .DS_Store
-/build/
+build/
 captures/
 .externalNativeBuild/
 .cxx/
@@ -22,3 +24,6 @@ captures/
 # General
 *.log
 .env
+
+# Claude Code local session state (machine-specific, not shared)
+.claude/

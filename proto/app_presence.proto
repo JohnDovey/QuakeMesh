@@ -1,0 +1,21 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// Announces a third-party app active on a node, reverse-DNS style app_id
+// (e.g. net.quakemesh.privatechat) to avoid collisions without a registry.
+message AppPresenceRecord {
+  bytes node_id = 1;
+  string app_id = 2;
+  string app_name = 3;
+  string app_version = 4;
+  int64 last_reported_unix_ms = 5;
+}

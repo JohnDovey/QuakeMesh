@@ -1,0 +1,30 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// Observed direct radio contact between two nodes. Not self-reported by
+// the observed node -- recorded by the observer, so it cannot be forged.
+message ProximityEvent {
+  bytes observer_node_id = 1;
+  bytes observed_node_id = 2;
+  int32 rssi = 3;
+  string transport = 4;
+  int64 observed_at_unix_ms = 5;
+}
+
+// Signed explicit trust endorsement. Can only be issued for a node_id the
+// endorsing device has itself recorded a ProximityEvent with.
+message TrustEndorsement {
+  bytes endorser_node_id = 1;
+  bytes endorsed_node_id = 2;
+  int64 endorsed_at_unix_ms = 3;
+  bytes signature = 4;
+}

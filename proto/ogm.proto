@@ -1,0 +1,25 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.1 - Initial scaffold.
+
+syntax = "proto3";
+
+package quakemesh.wire;
+
+option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
+option java_package = "net.quakemesh.proto";
+
+// Originator Message: BATMAN-adv-inspired routing advertisement.
+message Ogm {
+  bytes node_id = 1;
+  uint64 sequence_number = 2;
+  uint32 ttl = 3;
+  bool is_startup_announce = 4; // high-priority "I'm up" variant
+}
+
+// Direct-neighbour liveness ping, independent of OGM refresh cadence.
+message Hello {
+  bytes node_id = 1;
+  int64 sent_at_unix_ms = 2;
+}
