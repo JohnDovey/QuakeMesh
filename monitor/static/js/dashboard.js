@@ -519,6 +519,29 @@ async function loadAppStats() {
   }
 }
 
+async function loadSosAlerts() {
+  const rows = await api('/api/sos-alerts') || [];
+  const tbody = document.getElementById('sos-table');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4">No SOS alerts yet. Publish with <code>go run ./apps/sosbeacon</code>.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const a of rows) {
+    const tr = document.createElement('tr');
+    const loc = (a.lat || a.lon)
+      ? `${a.lat?.toFixed?.(5) ?? a.lat}, ${a.lon?.toFixed?.(5) ?? a.lon}${a.accuracy_m ? ` (±${Math.round(a.accuracy_m)} m)` : ''}`
+      : '—';
+    const text = a.text || a.raw_payload || '—';
+    tr.innerHTML = `<td>${formatDateTime(a.received_at)}</td><td>${shortId(a.node_id)}</td>
+      <td>${text}</td><td>${loc}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
 async function loadBanList() {
   const rows = await api('/api/ban-list') || [];
   const tbody = document.getElementById('ban-table');
@@ -656,6 +679,9 @@ connectWS((ev) => {
   if (ev.type === 'app_presence_changed') {
     loadAppStats();
   }
+  if (ev.type === 'sos_alert_published') {
+    loadSosAlerts();
+  }
   if (ev.type === 'ban_proposal_changed' || ev.type === 'ban_verdict_changed') {
     loadBanList();
   }
@@ -672,6 +698,7 @@ connectWS((ev) => {
     await loadRelayHubs();
     await loadInternetFallback();
     await loadAppStats();
+    await loadSosAlerts();
     await loadBanList();
   } catch (_) {
     window.location.href = '/login';

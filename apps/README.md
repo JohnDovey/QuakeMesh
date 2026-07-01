@@ -50,3 +50,5 @@ go run ./sdk/go/cmd/meshdemo -tcp 127.0.0.1:<hub-daemon-port>
 ```
 
 On Android, start the mesh and tap **SDK demo** in the QuakeMesh app to exercise `HttpMeshClient` against loopback `:18084`.
+
+SOS alerts published via the hub daemon appear live in **QuakeMeshMonitor → SOS Alerts**.

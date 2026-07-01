@@ -216,7 +216,7 @@ func (s *Server) InternetFallbackChanged(enabled bool) {
 	})
 }
 
-// AppPresenceChanged implements daemonapi.PresenceNotifier.
+// AppPresenceChanged implements daemonapi.Notifier.
 func (s *Server) AppPresenceChanged(nodeID identity.NodeID, appID, appVersion string) {
 	s.Publish(&wire.ManagementEvent{
 		EmittedAtUnixMs: time.Now().UnixMilli(),
@@ -225,6 +225,21 @@ func (s *Server) AppPresenceChanged(nodeID identity.NodeID, appID, appVersion st
 				NodeId:      nodeID[:],
 				AppId:       appID,
 				AppVersion:  appVersion,
+			},
+		},
+	})
+}
+
+// SosAlertPublished implements daemonapi.Notifier.
+func (s *Server) SosAlertPublished(nodeID identity.NodeID, appID, topic string, payload []byte) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_SosAlertPublished{
+			SosAlertPublished: &wire.SosAlertPublished{
+				NodeId:      nodeID[:],
+				AppId:       appID,
+				Topic:       topic,
+				PayloadJson: append([]byte(nil), payload...),
 			},
 		},
 	})

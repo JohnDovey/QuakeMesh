@@ -17,6 +17,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/datastore"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/hubclient"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/server"
+	"github.com/JohnDovey/QuakeMesh/monitor/internal/sosfeed"
 )
 
 // Config configures a runnable Monitor instance.
@@ -53,6 +54,7 @@ func New(cfg Config, staticFS embed.FS) (*Monitor, error) {
 	}
 
 	data := datastore.New(db)
+	sos := sosfeed.New()
 	hub := hubclient.New(cfg.HubWSURL)
 	srv := server.New(server.Config{
 		BindAddr: cfg.BindAddr,
@@ -60,6 +62,7 @@ func New(cfg Config, staticFS embed.FS) (*Monitor, error) {
 		Auth:     authStore,
 		Data:     data,
 		Hub:      hub,
+		SOS:      sos,
 	})
 
 	return &Monitor{

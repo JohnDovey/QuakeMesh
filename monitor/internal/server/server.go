@@ -32,6 +32,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/datastore"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/hubclient"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/relayprobe"
+	"github.com/JohnDovey/QuakeMesh/monitor/internal/sosfeed"
 )
 
 var browserUpgrader = websocket.Upgrader{
@@ -45,6 +46,7 @@ type Config struct {
 	Auth     *auth.Store
 	Data     *datastore.Store
 	Hub      *hubclient.Client
+	SOS      *sosfeed.Store
 }
 
 // Server is QuakeMeshMonitor's HTTP and WebSocket front end.
@@ -80,6 +82,7 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/app-stats", s.requireAuth(s.handleAppStats))
 	mux.HandleFunc("/api/ban-list", s.requireAuth(s.handleBanList))
 	mux.HandleFunc("/api/ban-list/", s.requireAuth(s.handleBanListAction))
+	mux.HandleFunc("/api/sos-alerts", s.requireAuth(s.handleSosAlerts))
 	mux.HandleFunc("/ws", s.requireAuthWS(s.handleBrowserWS))
 	mux.Handle("/", s.handleStatic())
 
@@ -117,6 +120,9 @@ func (s *Server) Close(ctx context.Context) error {
 
 func (s *Server) fanOutHubEvents(hubCh <-chan hubclient.Event) {
 	for ev := range hubCh {
+		if ev.Type == "sos_alert_published" && s.cfg.SOS != nil && ev.PayloadJSON != "" {
+			s.cfg.SOS.Add(ev.NodeID, ev.AppID, ev.Topic, []byte(ev.PayloadJSON))
+		}
 		s.mu.Lock()
 		for ch := range s.browsers {
 			select {
@@ -386,6 +392,18 @@ func (s *Server) handleAppStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, stats)
+}
+
+func (s *Server) handleSosAlerts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.cfg.SOS == nil {
+		writeJSON(w, []any{})
+		return
+	}
+	writeJSON(w, s.cfg.SOS.List())
 }
 
 func (s *Server) handleHopLatency(w http.ResponseWriter, r *http.Request) {

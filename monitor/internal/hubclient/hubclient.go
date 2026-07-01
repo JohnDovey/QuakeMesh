@@ -40,6 +40,13 @@ type Event struct {
 	AppVersion      string  `json:"app_version,omitempty"`
 	VersionRange    string  `json:"version_range,omitempty"`
 	Agree           bool    `json:"agree,omitempty"`
+	Topic           string  `json:"topic,omitempty"`
+	Text            string  `json:"text,omitempty"`
+	Lat             float64 `json:"lat,omitempty"`
+	Lon             float64 `json:"lon,omitempty"`
+	AccuracyM       float64 `json:"accuracy_m,omitempty"`
+	SentAtUnixMs    int64   `json:"sent_at_unix_ms,omitempty"`
+	PayloadJSON     string  `json:"payload_json,omitempty"`
 }
 
 // Client subscribes to QuakeMeshHub's loopback /ws management stream.
@@ -209,6 +216,30 @@ func translateEvent(mgmt *wire.ManagementEvent) (Event, bool) {
 			HubID:           nodeIDString(e.BanVerdictChanged.HubId),
 			Agree:           e.BanVerdictChanged.Agree,
 		}, true
+	case *wire.ManagementEvent_SosAlertPublished:
+		ev := Event{
+			Type:            "sos_alert_published",
+			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
+			NodeID:          nodeIDString(e.SosAlertPublished.NodeId),
+			AppID:           e.SosAlertPublished.AppId,
+			Topic:           e.SosAlertPublished.Topic,
+			PayloadJSON:     string(e.SosAlertPublished.PayloadJson),
+		}
+		var parsed struct {
+			Text      string  `json:"text"`
+			Lat       float64 `json:"lat"`
+			Lon       float64 `json:"lon"`
+			AccuracyM float64 `json:"accuracy_m"`
+			SentAt    int64   `json:"sent_at"`
+		}
+		if err := json.Unmarshal(e.SosAlertPublished.PayloadJson, &parsed); err == nil {
+			ev.Text = parsed.Text
+			ev.Lat = parsed.Lat
+			ev.Lon = parsed.Lon
+			ev.AccuracyM = parsed.AccuracyM
+			ev.SentAtUnixMs = parsed.SentAt
+		}
+		return ev, true
 	default:
 		return base, false
 	}

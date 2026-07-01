@@ -20,6 +20,7 @@
       <a href="#trust" data-view="trust">Trust Scores</a>
       <a href="#hop-timing" data-view="hop-timing">Hop Timing</a>
       <a href="#apps" data-view="apps">App Stats</a>
+      <a href="#sos" data-view="sos">SOS Alerts</a>
       <a href="#bans" data-view="bans">Ban List</a>
       <a href="#relay" data-view="relay">Relay Hubs</a>
       <a href="#" id="logout">Logout</a>
@@ -152,6 +153,19 @@
             <tr><th>App ID</th><th>Version</th><th>Nodes</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
           </thead>
           <tbody id="app-stats-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-sos" class="hidden">
+      <div class="panel">
+        <h2>SOS Alerts</h2>
+        <p>Live feed from <code>net.quakemesh.sosbeacon</code> publishes on topic <code>sos</code> via the hub mesh-sdk daemon.</p>
+        <table>
+          <thead>
+            <tr><th>Received (local)</th><th>Node</th><th>Message</th><th>Location</th></tr>
+          </thead>
+          <tbody id="sos-table"></tbody>
         </table>
       </div>
     </section>

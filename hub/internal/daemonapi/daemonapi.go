@@ -34,9 +34,10 @@ type DTNSender interface {
 	Enqueue(src, dst identity.NodeID, payload []byte) error
 }
 
-// PresenceNotifier is called when app presence changes.
-type PresenceNotifier interface {
+// Notifier is called when app presence or published topics change.
+type Notifier interface {
 	AppPresenceChanged(nodeID identity.NodeID, appID, appVersion string)
+	SosAlertPublished(nodeID identity.NodeID, appID, topic string, payload []byte)
 }
 
 // Config configures a Server.
@@ -47,7 +48,7 @@ type Config struct {
 	Bans       *banlist.Store
 	LocalHub   identity.NodeID
 	Sender     DTNSender
-	Notifier   PresenceNotifier
+	Notifier   Notifier
 }
 
 // Server is the local mesh-sdk daemon API.
@@ -274,7 +275,8 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if _, ok := s.sessionFromRequest(r); !ok {
+	sess, ok := s.sessionFromRequest(r)
+	if !ok {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -292,6 +294,9 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.broadcastTopic(body.Topic, payload)
+	if s.cfg.Notifier != nil && body.Topic == "sos" {
+		s.cfg.Notifier.SosAlertPublished(sess.nodeID, sess.appID, body.Topic, payload)
+	}
 	writeJSON(w, map[string]bool{"ok": true})
 }
 

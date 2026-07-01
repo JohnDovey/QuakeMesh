@@ -10,6 +10,14 @@ package quakemesh.wire;
 option go_package = "github.com/JohnDovey/QuakeMesh/proto/wire;wire";
 option java_package = "net.quakemesh.proto";
 
+// Emitted when an app publishes to the SOS topic via the mesh-sdk daemon.
+message SosAlertPublished {
+  bytes node_id = 1;
+  string app_id = 2;
+  string topic = 3;
+  bytes payload_json = 4;
+}
+
 // Live event stream from a Hub's loopback management API (127.0.0.1:8083)
 // to QuakeMeshMonitor, delivered over the Monitor's /ws WebSocket endpoint.
 message ManagementEvent {
@@ -24,6 +32,7 @@ message ManagementEvent {
     AppPresenceChanged app_presence_changed = 7;
     BanProposalChanged ban_proposal_changed = 8;
     BanVerdictChanged ban_verdict_changed = 9;
+    SosAlertPublished sos_alert_published = 10;
   }
 }
 
