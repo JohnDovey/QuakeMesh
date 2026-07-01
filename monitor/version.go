@@ -10,9 +10,10 @@
 //   0.0.7 - Phase 6: live DTN queue depth (non-expired bundles only).
 //   0.0.8 - Backbone hub tracking: /api/hubs, overview hub counts.
 //   0.0.9 - Phase 7: Trust Scores view and trust-coloured map markers.
+//   0.0.10 - Phase 8: orphan direction hints on Node Map; timezone in times.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.9"
+const Version = "0.0.10"

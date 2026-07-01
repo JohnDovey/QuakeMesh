@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.5 - Phase 4: mesh start/stop UI wired to foreground service.
+//   0.0.10 - Phase 8: show GPS fix when mesh is running.
 
 package net.quakemesh.android
 
@@ -38,7 +39,12 @@ class MainActivity : AppCompatActivity() {
         nodeIdView = findViewById(R.id.node_id_text)
         toggleButton = findViewById(R.id.toggle_mesh_button)
 
-        MeshEngine.statusListener = { msg -> runOnUiThread { statusView.text = msg } }
+        MeshEngine.statusListener = { msg ->
+            runOnUiThread {
+                val loc = MeshEngine.locationSummary()
+                statusView.text = if (loc != null) "$msg\nGPS: $loc" else msg
+            }
+        }
 
         toggleButton.setOnClickListener {
             if (meshRunning) {

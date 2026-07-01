@@ -5,6 +5,7 @@
 //           for the Monitor dashboard.
 //   0.0.7 - hub_registry queries; nodes exclude backbone hubs.
 //   0.0.9 - Trust score breakdown per mesh node.
+//   0.0.10 - Orphan direction hints for stale nodes on the Node Map.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/location"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
 	"github.com/JohnDovey/QuakeMesh/core/trust"
 )
@@ -94,6 +96,23 @@ type TrustScore struct {
 	Total             int    `json:"total"`
 	ProximityEvents   int    `json:"proximity_events"`
 	EndorsementCount  int    `json:"endorsement_count"`
+}
+
+// OrphanHint is a bearing/distance estimate for a stale mesh node.
+type OrphanHint struct {
+	NodeID        string    `json:"node_id"`
+	Status        string    `json:"status"`
+	LastSeen      time.Time `json:"last_seen"`
+	LastLat       *float64  `json:"last_lat,omitempty"`
+	LastLon       *float64  `json:"last_lon,omitempty"`
+	RefLat        float64   `json:"ref_lat"`
+	RefLon        float64   `json:"ref_lon"`
+	BearingDeg    float64   `json:"bearing_deg"`
+	DistanceM     float64   `json:"distance_m"`
+	Confidence    string    `json:"confidence"`
+	AgeLabel      string    `json:"age_label"`
+	Source        string    `json:"source"`
+	ProximityNote string    `json:"proximity_note,omitempty"`
 }
 
 // Nodes returns mesh nodes, excluding backbone hubs in hub_registry.
@@ -288,6 +307,88 @@ func (s *Store) TrustScores() ([]TrustScore, error) {
 		})
 	}
 	return scores, nil
+}
+
+// OrphanHints returns bearing/distance estimates for stale mesh nodes.
+func (s *Store) OrphanHints() ([]OrphanHint, error) {
+	nodes, err := s.Nodes()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	var refPoints []location.Point
+	for _, n := range nodes {
+		if n.Status != "online" || n.Lat == nil || n.Lon == nil {
+			continue
+		}
+		refPoints = append(refPoints, location.Point{Lat: *n.Lat, Lon: *n.Lon})
+	}
+	ref, hasRef := location.ReferenceCentroid(refPoints)
+	if !hasRef {
+		ref = location.Point{Lat: 0, Lon: 0}
+	}
+
+	var hints []OrphanHint
+	for _, n := range nodes {
+		if n.Status == "online" {
+			continue
+		}
+		idBytes, err := hex.DecodeString(n.NodeID)
+		if err != nil || len(idBytes) != len(identity.NodeID{}) {
+			continue
+		}
+		var id identity.NodeID
+		copy(id[:], idBytes)
+		prox, _ := s.latestProximityEstimate(id)
+		computed := location.ComputeOrphanHint(ref, n.LastSeen, now, n.Lat, n.Lon, prox)
+		h := OrphanHint{
+			NodeID:        n.NodeID,
+			Status:        n.Status,
+			LastSeen:      n.LastSeen,
+			LastLat:       n.Lat,
+			LastLon:       n.Lon,
+			RefLat:        ref.Lat,
+			RefLon:        ref.Lon,
+			BearingDeg:    computed.BearingDeg,
+			DistanceM:     computed.DistanceM,
+			Confidence:    string(computed.Confidence),
+			AgeLabel:      computed.AgeLabel,
+			Source:        computed.Source,
+			ProximityNote: computed.ProximityNote,
+		}
+		if computed.LastPoint != nil {
+			h.LastLat = &computed.LastPoint.Lat
+			h.LastLon = &computed.LastPoint.Lon
+		}
+		hints = append(hints, h)
+	}
+	return hints, nil
+}
+
+func (s *Store) latestProximityEstimate(observed identity.NodeID) (*location.ProximityEstimate, error) {
+	var rssi int
+	var obsLat, obsLon sql.NullFloat64
+	err := s.db.QueryRow(`
+		SELECT pe.rssi, nr.last_lat, nr.last_lon
+		FROM proximity_events pe
+		JOIN node_registry nr ON nr.node_id = pe.observer_node_id
+		WHERE pe.observed_node_id = ?
+		  AND nr.last_lat IS NOT NULL AND nr.last_lon IS NOT NULL
+		ORDER BY pe.observed_at DESC LIMIT 1`,
+		observed[:],
+	).Scan(&rssi, &obsLat, &obsLon)
+	if err != nil {
+		return nil, err
+	}
+	if !obsLat.Valid || !obsLon.Valid {
+		return nil, sql.ErrNoRows
+	}
+	dist := location.RssiDistanceM(rssi)
+	return &location.ProximityEstimate{
+		Observer: location.Point{Lat: obsLat.Float64, Lon: obsLon.Float64},
+		Distance: dist,
+		RSSI:     rssi,
+	}, nil
 }
 
 // RelayHubs returns every relay hub record.

@@ -9,6 +9,7 @@
 //   0.0.7 - Phase 6: stale-node probing, revival "I'm up" rebroadcast.
 //   0.0.7 - Register direct peer hubs in hub_registry; hub stale sweep.
 //   0.0.9 - Record hub-observed proximity events for trust scoring.
+//   0.0.10 - Phase 8: apply GPS coordinates from received OGMs.
 
 // Package ogmengine sends and receives OGMs (Originator Messages) over
 // UDP, maintaining node_registry/routing_table entries for reachable
@@ -303,6 +304,7 @@ func (e *Engine) handleOgm(msg *wire.Ogm, raddr *net.UDPAddr) {
 	}
 
 	e.recordProximity(originID, msg.HopCount)
+	e.applyLocation(originID, msg)
 
 	hopCount := int(msg.HopCount) + 1
 	linkTQ := e.linkTQ(forwarder)
@@ -567,6 +569,26 @@ func (e *Engine) recordProximity(observed identity.NodeID, hopCount uint32) {
 	}
 	if err := e.cfg.Trust.RecordProximity(e.cfg.SelfID, observed, rssi, transport, time.Now()); err != nil {
 		log.Printf("ogmengine: RecordProximity: %v", err)
+	}
+}
+
+func (e *Engine) applyLocation(nodeID identity.NodeID, msg *wire.Ogm) {
+	if msg.Lat == nil || msg.Lon == nil {
+		return
+	}
+	lat, lon := msg.GetLat(), msg.GetLon()
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return
+	}
+	if lat == 0 && lon == 0 {
+		return
+	}
+	at := time.Now()
+	if msg.LocationAtUnixMs != nil && msg.GetLocationAtUnixMs() > 0 {
+		at = time.UnixMilli(msg.GetLocationAtUnixMs())
+	}
+	if err := e.cfg.Registry.UpdateLocation(nodeID, lat, lon, at); err != nil {
+		log.Printf("ogmengine: UpdateLocation: %v", err)
 	}
 }
 

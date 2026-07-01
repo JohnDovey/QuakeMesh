@@ -19,6 +19,10 @@ message Ogm {
   bool is_startup_announce = 4; // high-priority "I'm up" variant
   bytes last_hop_id = 5;        // rebroadcaster NodeID (empty at origin)
   uint32 hop_count = 6;         // hops from originator (0 at origin)
+  optional double lat = 7;
+  optional double lon = 8;
+  optional float location_accuracy_m = 9;
+  optional int64 location_at_unix_ms = 10;
 }
 
 // Direct-neighbour liveness ping, independent of OGM refresh cadence.

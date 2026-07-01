@@ -4,6 +4,8 @@ let nodes = [];
 let hubs = [];
 let hubIds = new Set();
 let trustByNode = {};
+let orphanHints = [];
+let orphanLayers = [];
 let routes = [];
 let graphNetwork = null;
 
@@ -68,13 +70,13 @@ function renderHubsTable(tbodyId, detailed) {
         <td>${hubEndpoint(h)}</td>
         <td>${h.relay_capable ? 'yes' : 'no'}</td>
         <td class="${cls}">${h.status}</td>
-        <td>${new Date(h.first_seen).toLocaleString()}</td>
-        <td>${new Date(h.last_seen).toLocaleString()}</td>`;
+        <td>${formatDateTime(h.first_seen)}</td>
+        <td>${formatDateTime(h.last_seen)}</td>`;
     } else {
       tr.innerHTML = `<td class="kind-hub" title="${h.hub_id}">${shortId(h.hub_id)}</td>
         <td>${hubEndpoint(h)}</td>
         <td class="${cls}">${h.status}</td>
-        <td>${new Date(h.last_seen).toLocaleString()}</td>`;
+        <td>${formatDateTime(h.last_seen)}</td>`;
     }
     tbody.appendChild(tr);
   }
@@ -90,7 +92,7 @@ function renderNodesTable() {
     const trustLabel = score != null ? ` · trust ${score}` : '';
     tr.innerHTML = `<td title="${n.node_id}">${shortId(n.node_id)}</td>
       <td class="${cls}">${n.status}${trustLabel}</td>
-      <td>${new Date(n.last_seen).toLocaleString()}</td>`;
+      <td>${formatDateTime(n.last_seen)}</td>`;
     tbody.appendChild(tr);
   }
 }
@@ -140,6 +142,87 @@ function refreshMapMarkers() {
     const bounds = L.latLngBounds(withGps.map((n) => [n.lat, n.lon]));
     map.fitBounds(bounds.pad(0.2));
   }
+  refreshOrphanMap();
+}
+
+function formatBearing(deg) {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const idx = Math.round(deg / 45) % 8;
+  return `${deg.toFixed(0)}° ${dirs[idx]}`;
+}
+
+function formatDistance(m) {
+  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
+  return `${Math.round(m)} m`;
+}
+
+function renderOrphanList() {
+  const list = document.getElementById('orphan-hints-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!orphanHints.length) {
+    const li = document.createElement('li');
+    li.textContent = 'No stale nodes — nothing to recover.';
+    list.appendChild(li);
+    return;
+  }
+  for (const h of orphanHints) {
+    const li = document.createElement('li');
+    const bearing = h.distance_m > 0 ? formatBearing(h.bearing_deg) : '—';
+    const dist = h.distance_m > 0 ? formatDistance(h.distance_m) : '—';
+    let detail = `${formatDateTime(h.last_seen)} · ${h.confidence} · ${h.age_label}`;
+    if (h.proximity_note) detail += ` · ${h.proximity_note}`;
+    li.innerHTML = `<strong>${shortId(h.node_id)}</strong> — ${bearing} / ${dist}<br>`
+      + `<span class="status-stale">${detail}</span>`;
+    list.appendChild(li);
+  }
+}
+
+function refreshOrphanMap() {
+  if (!map) return;
+  for (const layer of orphanLayers) map.removeLayer(layer);
+  orphanLayers = [];
+  const hasRef = orphanHints.some((h) => h.ref_lat !== 0 || h.ref_lon !== 0);
+  let refDrawn = false;
+  for (const h of orphanHints) {
+    if (h.last_lat == null || h.last_lon == null) continue;
+    const popup = `<strong>${shortId(h.node_id)}</strong> (stale)<br>`
+      + `${formatBearing(h.bearing_deg)} · ${formatDistance(h.distance_m)}<br>`
+      + `${h.confidence} · ${h.age_label}`;
+    const marker = L.circleMarker([h.last_lat, h.last_lon], {
+      radius: 11,
+      color: '#d29922',
+      fillColor: '#8b6914',
+      fillOpacity: 0.45,
+      weight: 2,
+      dashArray: '4 4',
+    }).addTo(map).bindPopup(popup);
+    orphanLayers.push(marker);
+    if (hasRef && h.distance_m > 0) {
+      const line = L.polyline(
+        [[h.ref_lat, h.ref_lon], [h.last_lat, h.last_lon]],
+        { color: '#d29922', weight: 2, dashArray: '8 6', opacity: 0.75 },
+      ).addTo(map);
+      orphanLayers.push(line);
+      if (!refDrawn) {
+        const refMarker = L.circleMarker([h.ref_lat, h.ref_lon], {
+          radius: 5,
+          color: '#6cb6ff',
+          fillColor: '#1f6feb',
+          fillOpacity: 0.8,
+          weight: 1,
+        }).addTo(map).bindPopup('Reference (online nodes centroid)');
+        orphanLayers.push(refMarker);
+        refDrawn = true;
+      }
+    }
+  }
+}
+
+async function loadOrphanHints() {
+  orphanHints = await api('/api/orphan-hints') || [];
+  renderOrphanList();
+  refreshOrphanMap();
 }
 
 async function loadNodes() {
@@ -154,7 +237,21 @@ async function loadHubs() {
   hubIds = new Set(hubs.map((h) => h.hub_id));
   renderHubsTable('hubs-table-overview', false);
   renderHubsTable('hubs-table', true);
+  renderMapHubList();
   refreshGraph();
+}
+
+function renderMapHubList() {
+  const list = document.getElementById('map-hubs-list');
+  if (!list) return;
+  list.innerHTML = '';
+  for (const h of hubs) {
+    const li = document.createElement('li');
+    const cls = h.status === 'online' ? 'status-online' : 'status-stale';
+    li.innerHTML = `<span class="kind-hub">${shortId(h.hub_id)}</span> — ${hubEndpoint(h)} — `
+      + `<span class="${cls}">${h.status}</span> — ${formatDateTime(h.last_seen)}`;
+    list.appendChild(li);
+  }
 }
 
 async function loadTrustScores() {
@@ -209,6 +306,60 @@ function renderRoutesTable() {
   }
 }
 
+function hubGraphNode(h) {
+  const online = h.status === 'online';
+  return {
+    id: h.hub_id,
+    label: shortId(h.hub_id),
+    shape: 'diamond',
+    size: 24,
+    font: { color: '#e7ecf1', size: 13 },
+    color: online
+      ? { background: '#1f6feb', border: '#6cb6ff', highlight: { background: '#388bfd', border: '#6cb6ff' } }
+      : { background: '#3d4f7a', border: '#6e7681', highlight: { background: '#4d5f8a', border: '#8b949e' } },
+    title: `hub · ${h.status}\n${hubEndpoint(h)}\nlast seen: ${formatDateTime(h.last_seen)}`,
+    group: 'hub',
+  };
+}
+
+function graphNodeForId(id) {
+  if (hubIds.has(id)) {
+    const h = hubs.find((x) => x.hub_id === id);
+    if (h) return hubGraphNode(h);
+    return {
+      id,
+      label: shortId(id),
+      shape: 'diamond',
+      size: 24,
+      color: { background: '#1f6feb', border: '#6cb6ff' },
+      title: 'hub',
+      group: 'hub',
+    };
+  }
+  const n = nodes.find((x) => x.node_id === id);
+  if (n) {
+    const score = trustByNode[n.node_id]?.total ?? 0;
+    const fill = trustColor(score);
+    return {
+      id: n.node_id,
+      label: shortId(n.node_id),
+      shape: 'dot',
+      size: 16,
+      color: { background: fill, border: '#e7ecf1', highlight: { background: fill, border: '#fff' } },
+      title: `node · ${n.status} · trust ${score}`,
+      group: 'node',
+    };
+  }
+  return {
+    id,
+    label: shortId(id),
+    shape: 'dot',
+    size: 14,
+    color: { background: '#6e7681', border: '#9da7b3' },
+    group: 'node',
+  };
+}
+
 function ensureGraph() {
   if (graphNetwork) {
     refreshGraph();
@@ -218,8 +369,12 @@ function ensureGraph() {
   if (!container || typeof vis === 'undefined') return;
   graphNetwork = new vis.Network(container, { nodes: [], edges: [] }, {
     physics: { stabilization: true },
-    nodes: { color: { background: '#238636', border: '#3fb950' }, font: { color: '#e7ecf1' } },
+    nodes: { font: { color: '#e7ecf1' } },
     edges: { color: { color: '#6cb6ff' }, arrows: 'to' },
+    groups: {
+      hub: { shape: 'diamond' },
+      node: { shape: 'dot' },
+    },
   });
   refreshGraph();
 }
@@ -227,52 +382,44 @@ function ensureGraph() {
 function refreshGraph() {
   if (!graphNetwork) return;
   const nodeMap = new Map();
+
   for (const h of hubs) {
-    nodeMap.set(h.hub_id, {
-      id: h.hub_id,
-      label: shortId(h.hub_id),
-      shape: 'diamond',
-      color: h.status === 'online'
-        ? { background: '#1f6feb', border: '#6cb6ff' }
-        : { background: '#3d4f7a', border: '#6e7681' },
-      title: `hub · ${h.status}`,
-    });
+    nodeMap.set(h.hub_id, hubGraphNode(h));
   }
   for (const n of nodes) {
-    const score = trustByNode[n.node_id]?.total ?? 0;
-    nodeMap.set(n.node_id, {
-      id: n.node_id,
-      label: shortId(n.node_id),
-      color: trustColor(score),
-      title: `node · ${n.status} · trust ${score}`,
-    });
+    if (hubIds.has(n.node_id)) continue;
+    nodeMap.set(n.node_id, graphNodeForId(n.node_id));
   }
   for (const r of routes) {
     if (!nodeMap.has(r.destination)) {
-      nodeMap.set(r.destination, {
-        id: r.destination,
-        label: shortId(r.destination),
-        shape: hubIds.has(r.destination) ? 'diamond' : 'ellipse',
-      });
+      nodeMap.set(r.destination, graphNodeForId(r.destination));
     }
     if (!nodeMap.has(r.next_hop)) {
-      nodeMap.set(r.next_hop, {
-        id: r.next_hop,
-        label: shortId(r.next_hop),
-        shape: hubIds.has(r.next_hop) ? 'diamond' : 'ellipse',
-      });
+      nodeMap.set(r.next_hop, graphNodeForId(r.next_hop));
     }
   }
-  const edges = routes.map((r, i) => ({
-    id: i,
-    from: r.next_hop,
-    to: r.destination,
-    label: `tq ${(r.tq ?? 0).toFixed(2)}`,
-    title: `hops: ${r.hop_count}, latency: ${r.latency_ms}ms`,
-  }));
+
+  const edgeMap = new Map();
+  for (const r of routes) {
+    const key = `${r.next_hop}->${r.destination}`;
+    const bothHubs = hubIds.has(r.next_hop) && hubIds.has(r.destination);
+    edgeMap.set(key, {
+      id: key,
+      from: r.next_hop,
+      to: r.destination,
+      label: bothHubs ? 'hub' : `tq ${(r.tq ?? 0).toFixed(2)}`,
+      title: bothHubs
+        ? 'hub route'
+        : `route · hops: ${r.hop_count}, latency: ${r.latency_ms}ms`,
+      arrows: 'to',
+      width: bothHubs ? 2.5 : 1,
+      color: bothHubs ? { color: '#6cb6ff' } : { color: '#58a6ff' },
+    });
+  }
+
   graphNetwork.setData({
     nodes: new vis.DataSet([...nodeMap.values()]),
-    edges: new vis.DataSet(edges),
+    edges: new vis.DataSet([...edgeMap.values()]),
   });
 }
 
@@ -288,7 +435,7 @@ async function loadRelayHubs() {
   for (const h of hubs) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${h.ip}</td><td>${h.port}</td><td>${h.source}</td>
-      <td>${new Date(h.last_verified).toLocaleString()}</td>
+      <td>${formatDateTime(h.last_verified)}</td>
       <td>
         <button class="secondary probe-btn" data-id="${h.hub_id}">Probe</button>
         <button class="danger delete-btn" data-id="${h.hub_id}">Remove</button>
@@ -334,15 +481,18 @@ connectWS((ev) => {
   if (ev.type === 'node_status_changed') {
     loadNodes();
     loadTrustScores();
+    loadOrphanHints();
     loadOverview();
   }
   if (ev.type === 'hub_status_changed') {
     loadHubs();
+    loadRoutes();
     loadOverview();
   }
   if (ev.type === 'route_changed') {
     loadOverview();
     loadRoutes();
+    loadHubs();
   }
   if (ev.type === 'dtn_queue_depth_changed') {
     document.getElementById('stat-dtn').textContent = ev.dtn_depth;
@@ -355,6 +505,7 @@ connectWS((ev) => {
     await loadHubs();
     await loadNodes();
     await loadTrustScores();
+    await loadOrphanHints();
     await loadRoutes();
     await loadRelayHubs();
   } catch (_) {

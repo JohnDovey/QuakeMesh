@@ -11,9 +11,10 @@
 //   0.0.7 - Phase 6: DTN store-and-forward queue.
 //   0.0.8 - hub_registry liveness; HubStatusChanged management events.
 //   0.0.9 - Phase 7: hub-observed proximity events for trust scoring.
+//   0.0.10 - Phase 8: GPS fields on OGM; UpdateLocation in registry.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.9"
+const Version = "0.0.10"

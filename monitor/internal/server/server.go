@@ -69,6 +69,7 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/nodes", s.requireAuth(s.handleNodes))
 	mux.HandleFunc("/api/hubs", s.requireAuth(s.handleHubs))
 	mux.HandleFunc("/api/routes", s.requireAuth(s.handleRoutes))
+	mux.HandleFunc("/api/orphan-hints", s.requireAuth(s.handleOrphanHints))
 	mux.HandleFunc("/api/trust-scores", s.requireAuth(s.handleTrustScores))
 	mux.HandleFunc("/api/relay-hubs", s.requireAuth(s.handleRelayHubs))
 	mux.HandleFunc("/api/relay-hubs/", s.requireAuth(s.handleRelayHubAction))
@@ -277,6 +278,19 @@ func (s *Server) handleTrustScores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, scores)
+}
+
+func (s *Server) handleOrphanHints(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	hints, err := s.cfg.Data.OrphanHints()
+	if err != nil {
+		http.Error(w, "orphan hints query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, hints)
 }
 
 func (s *Server) handleRelayHubs(w http.ResponseWriter, r *http.Request) {

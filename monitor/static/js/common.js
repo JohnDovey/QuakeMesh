@@ -36,6 +36,22 @@ function shortId(id) {
   return id.slice(0, 8) + '…';
 }
 
+const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  timeZoneName: 'short',
+});
+
+function formatDateTime(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return dateTimeFmt.format(d);
+}
+
 document.getElementById('logout')?.addEventListener('click', async (e) => {
   e.preventDefault();
   await api('/api/logout', { method: 'POST' });

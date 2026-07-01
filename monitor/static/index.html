@@ -40,14 +40,14 @@
       <div class="panel">
         <h3>Recent hubs</h3>
         <table>
-          <thead><tr><th>Hub ID</th><th>Endpoint</th><th>Status</th><th>Last seen</th></tr></thead>
+          <thead><tr><th>Hub ID</th><th>Endpoint</th><th>Status</th><th>Last seen (local)</th></tr></thead>
           <tbody id="hubs-table-overview"></tbody>
         </table>
       </div>
       <div class="panel">
         <h3>Recent nodes</h3>
         <table>
-          <thead><tr><th>Node ID</th><th>Status</th><th>Last seen</th></tr></thead>
+          <thead><tr><th>Node ID</th><th>Status</th><th>Last seen (local)</th></tr></thead>
           <tbody id="nodes-table"></tbody>
         </table>
       </div>
@@ -59,7 +59,7 @@
         <p>QuakeMeshHub instances on the network. Updates live via WebSocket.</p>
         <table>
           <thead>
-            <tr><th>Hub ID</th><th>Endpoint</th><th>Relay</th><th>Status</th><th>First seen</th><th>Last seen</th></tr>
+            <tr><th>Hub ID</th><th>Endpoint</th><th>Relay</th><th>Status</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
           </thead>
           <tbody id="hubs-table"></tbody>
         </table>
@@ -81,7 +81,14 @@
     <section id="view-graph" class="hidden">
       <div class="panel">
         <h2>Network Graph</h2>
-        <p>Nodes and active routes (next-hop edges). Updates live via WebSocket.</p>
+        <p>
+          Blue diamonds are backbone hubs; coloured dots are mesh nodes (colour = trust).
+          Solid arrows are active routes (hub routes are labelled &ldquo;hub&rdquo;).
+        </p>
+        <div class="graph-legend">
+          <span class="legend-item"><span class="legend-swatch legend-hub"></span> Hub</span>
+          <span class="legend-item"><span class="legend-swatch legend-node"></span> Node</span>
+        </div>
         <div id="network-graph" class="graph-panel"></div>
       </div>
     </section>
@@ -89,8 +96,14 @@
     <section id="view-map" class="hidden">
       <div class="panel">
         <h2>Node Map</h2>
-        <p>Marker colour reflects trust score (red → amber → green → blue).</p>
+        <p>
+          Online nodes: coloured dots (trust score). Stale nodes: amber dashed pins with direction lines from the online-node centroid.
+        </p>
         <div id="map"></div>
+        <h3>Orphaned / stale nodes</h3>
+        <ul id="orphan-hints-list"></ul>
+        <h3>Backbone hubs</h3>
+        <ul id="map-hubs-list"></ul>
         <h3>Nodes without GPS</h3>
         <ul id="no-gps-list"></ul>
       </div>
@@ -128,7 +141,7 @@
         </form>
         <table>
           <thead>
-            <tr><th>IP</th><th>Port</th><th>Source</th><th>Last verified</th><th>Actions</th></tr>
+            <tr><th>IP</th><th>Port</th><th>Source</th><th>Last verified (local)</th><th>Actions</th></tr>
           </thead>
           <tbody id="relay-table"></tbody>
         </table>

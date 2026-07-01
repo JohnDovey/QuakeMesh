@@ -43,6 +43,8 @@ type Node struct {
 	FirstSeen time.Time
 	LastSeen  time.Time
 	Status    NodeStatus
+	LastLat   *float64
+	LastLon   *float64
 }
 
 // Route is a row from routing_table.
@@ -99,6 +101,15 @@ func (r *Registry) UpsertSeen(nodeID identity.NodeID, seenAt time.Time) (statusC
 	return statusChanged, nil
 }
 
+// UpdateLocation stores the latest self-reported GPS fix for a node.
+func (r *Registry) UpdateLocation(nodeID identity.NodeID, lat, lon float64, observedAt time.Time) error {
+	_, err := r.db.Exec(
+		`UPDATE node_registry SET last_lat = ?, last_lon = ?, last_seen = MAX(last_seen, ?) WHERE node_id = ?`,
+		lat, lon, observedAt.UnixMilli(), nodeID[:],
+	)
+	return err
+}
+
 // MarkStaleBefore marks every online node last seen before cutoff as
 // stale, returning the ids of the nodes that changed.
 func (r *Registry) MarkStaleBefore(cutoff time.Time) ([]identity.NodeID, error) {
@@ -147,7 +158,7 @@ func (r *Registry) MarkStaleBefore(cutoff time.Time) ([]identity.NodeID, error) 
 
 // Nodes returns every row in node_registry.
 func (r *Registry) Nodes() ([]Node, error) {
-	rows, err := r.db.Query(`SELECT node_id, first_seen, last_seen, status FROM node_registry`)
+	rows, err := r.db.Query(`SELECT node_id, first_seen, last_seen, last_lat, last_lon, status FROM node_registry`)
 	if err != nil {
 		return nil, err
 	}
@@ -157,18 +168,28 @@ func (r *Registry) Nodes() ([]Node, error) {
 	for rows.Next() {
 		var idBytes []byte
 		var firstSeenMs, lastSeenMs int64
+		var lat, lon sql.NullFloat64
 		var status string
-		if err := rows.Scan(&idBytes, &firstSeenMs, &lastSeenMs, &status); err != nil {
+		if err := rows.Scan(&idBytes, &firstSeenMs, &lastSeenMs, &lat, &lon, &status); err != nil {
 			return nil, err
 		}
 		var id identity.NodeID
 		copy(id[:], idBytes)
-		nodes = append(nodes, Node{
+		n := Node{
 			NodeID:    id,
 			FirstSeen: time.UnixMilli(firstSeenMs),
 			LastSeen:  time.UnixMilli(lastSeenMs),
 			Status:    NodeStatus(status),
-		})
+		}
+		if lat.Valid {
+			v := lat.Float64
+			n.LastLat = &v
+		}
+		if lon.Valid {
+			v := lon.Float64
+			n.LastLon = &v
+		}
+		nodes = append(nodes, n)
 	}
 	return nodes, rows.Err()
 }
