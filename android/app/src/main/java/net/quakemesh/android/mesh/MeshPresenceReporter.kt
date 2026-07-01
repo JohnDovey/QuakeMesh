@@ -1,0 +1,75 @@
+// Copyright (c) 2026 John Dovey <dovey.john@gmail.com>
+//
+// Changelog:
+//   0.0.17 - POST periodic heartbeats to QuakeMeshHub for Monitor visibility.
+
+package net.quakemesh.android.mesh
+
+import android.util.Log
+import net.quakemesh.android.location.LocationReporter
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
+
+/**
+ * Reports this device's mesh node ID (and GPS when available) to a
+ * QuakeMeshHub [node heartbeat] endpoint so the node appears in Monitor.
+ */
+class MeshPresenceReporter(
+    private val nodeIdHex: String,
+    private val hubBaseUrl: String,
+    private val location: () -> LocationReporter.LocationFix?,
+) {
+    private var running = false
+    private var worker: Thread? = null
+
+    fun start() {
+        if (hubBaseUrl.isBlank() || running) return
+        running = true
+        worker = thread(name = "MeshPresence") {
+            while (running) {
+                sendHeartbeat()
+                Thread.sleep(INTERVAL_MS)
+            }
+        }
+    }
+
+    fun stop() {
+        running = false
+        worker?.interrupt()
+        worker = null
+    }
+
+    private fun sendHeartbeat() {
+        val base = hubBaseUrl.trimEnd('/')
+        val url = URL("$base/v1/heartbeat")
+        try {
+            val body = JSONObject().put("node_id", nodeIdHex)
+            location()?.let { fix ->
+                body.put("lat", fix.lat)
+                    .put("lon", fix.lon)
+                    .put("accuracy_m", fix.accuracyM.toDouble())
+            }
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            val code = conn.responseCode
+            conn.disconnect()
+            if (code !in 200..299) {
+                Log.w(TAG, "heartbeat HTTP $code to $base")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "heartbeat failed: ${e.message}")
+        }
+    }
+
+    companion object {
+        private const val TAG = "MeshPresence"
+        private const val INTERVAL_MS = 30_000L
+    }
+}

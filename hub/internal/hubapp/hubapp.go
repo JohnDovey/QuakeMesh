@@ -31,6 +31,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/hub/internal/dtnengine"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/fallback"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/managementapi"
+	"github.com/JohnDovey/QuakeMesh/hub/internal/nodeheartbeat"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/ogmengine"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/syncengine"
@@ -69,6 +70,9 @@ type Config struct {
 	// AppSocket is the mesh-sdk daemon listen address (unix: or tcp:).
 	// Empty disables the local app API.
 	AppSocket string
+	// HeartbeatAddr is the LAN HTTP bind address for mesh node presence
+	// reports (e.g. "0.0.0.0:18085"). Empty disables.
+	HeartbeatAddr string
 }
 
 // DefaultConfig returns sensible defaults for the tuning parameters.
@@ -83,6 +87,7 @@ func DefaultConfig() Config {
 		DTNInterval: 5 * time.Second,
 		SyncInterval: 30 * time.Second,
 		AppSocket:    "unix:/tmp/quakemeshhub.sock",
+		HeartbeatAddr: "0.0.0.0:18085",
 	}
 }
 
@@ -99,6 +104,7 @@ type Hub struct {
 	Fallback *fallback.Engine
 	API      *managementapi.Server
 	Daemon   *daemonapi.Server
+	Heartbeat *nodeheartbeat.Server
 }
 
 // New loads or creates this hub's identity, opens (and migrates) its
@@ -177,9 +183,19 @@ func New(cfg Config) (*Hub, error) {
 		Handler:    events,
 	})
 
+	var heartbeat *nodeheartbeat.Server
+	if cfg.HeartbeatAddr != "" {
+		heartbeat = nodeheartbeat.New(nodeheartbeat.Config{
+			ListenAddr: cfg.HeartbeatAddr,
+			Registry:   reg,
+			Notifier:   events,
+		})
+	}
+
 	return &Hub{
 		cfg: cfg, Identity: id, DB: db, Registry: reg,
 		OGM: ogm, DTN: dtnEng, Sync: syncEng, Fallback: fallbackEng, API: api, Daemon: daemon,
+		Heartbeat: heartbeat,
 	}, nil
 }
 
@@ -193,6 +209,15 @@ func (h *Hub) Start() error {
 		if err := h.Daemon.Start(); err != nil {
 			h.API.Close()
 			return fmt.Errorf("hubapp: start app daemon: %w", err)
+		}
+	}
+	if h.Heartbeat != nil {
+		if err := h.Heartbeat.Start(); err != nil {
+			if h.Daemon != nil {
+				h.Daemon.Close()
+			}
+			h.API.Close()
+			return fmt.Errorf("hubapp: start node heartbeat: %w", err)
 		}
 	}
 	h.DTN.Start()
@@ -264,7 +289,11 @@ func (h *Hub) Close() error {
 	if h.Daemon != nil {
 		daemonErr = h.Daemon.Close()
 	}
-	return errors.Join(h.Sync.Close(), h.OGM.Close(), daemonErr, h.API.Close(), h.DB.Close())
+	var heartbeatErr error
+	if h.Heartbeat != nil {
+		heartbeatErr = h.Heartbeat.Close()
+	}
+	return errors.Join(h.Sync.Close(), h.OGM.Close(), daemonErr, heartbeatErr, h.API.Close(), h.DB.Close())
 }
 
 type eventBridge struct {

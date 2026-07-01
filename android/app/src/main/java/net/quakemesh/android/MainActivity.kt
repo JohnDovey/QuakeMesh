@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -29,8 +30,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toggleButton: Button
     private lateinit var sdkDemoButton: Button
     private lateinit var sosButton: Button
+    private lateinit var hubUrlField: EditText
 
     private var meshRunning = false
+    private val prefs by lazy { getSharedPreferences("quakemesh_ui", MODE_PRIVATE) }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -47,6 +50,8 @@ class MainActivity : AppCompatActivity() {
         toggleButton = findViewById(R.id.toggle_mesh_button)
         sdkDemoButton = findViewById(R.id.sdk_demo_button)
         sosButton = findViewById(R.id.sos_demo_button)
+        hubUrlField = findViewById(R.id.hub_heartbeat_url)
+        hubUrlField.setText(prefs.getString(PREF_HUB_URL, ""))
 
         MeshEngine.statusListener = { msg ->
             runOnUiThread {
@@ -61,6 +66,9 @@ class MainActivity : AppCompatActivity() {
                 meshRunning = false
             } else {
                 requestPermissionsIfNeeded()
+                val hubUrl = hubUrlField.text.toString().trim()
+                prefs.edit().putString(PREF_HUB_URL, hubUrl).apply()
+                MeshEngine.hubHeartbeatUrl = hubUrl
                 MeshForegroundService.start(this)
                 meshRunning = true
             }
@@ -158,5 +166,9 @@ class MainActivity : AppCompatActivity() {
         if (!meshRunning) {
             statusView.text = getString(R.string.mesh_stopped)
         }
+    }
+
+    companion object {
+        private const val PREF_HUB_URL = "hub_heartbeat_url"
     }
 }

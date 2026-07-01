@@ -33,11 +33,17 @@ func main() {
 	socket := flag.String("socket", "/tmp/quakemeshhub.sock", "QuakeMeshHub daemon Unix socket")
 	tcp := flag.String("tcp", "", "loopback TCP host:port (overrides -socket)")
 	text := flag.String("text", "SOS — need assistance", "alert message")
+	post := flag.String("post", "", "alias for -text (same as discuss app)")
 	lat := flag.Float64("lat", 0, "latitude (optional)")
 	lon := flag.Float64("lon", 0, "longitude (optional)")
 	acc := flag.Float64("acc", 0, "accuracy in metres (optional)")
 	listen := flag.Bool("listen", false, "subscribe and print SOS alerts until interrupted")
 	flag.Parse()
+
+	msg := *text
+	if *post != "" {
+		msg = *post
+	}
 
 	client := dialClient(*socket, *tcp)
 	sess, err := client.Register(appID, "SOS Beacon", "0.1.0", []string{"sos", "location"})
@@ -61,7 +67,7 @@ func main() {
 	}
 
 	alert := sosAlert{
-		Text:   *text,
+		Text:   msg,
 		Lat:    *lat,
 		Lon:    *lon,
 		NodeID: hex.EncodeToString(sess.NodeID),

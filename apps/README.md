@@ -41,6 +41,7 @@ go run ./apps/sosbeacon -listen
 
 # Terminal B — broadcast (optionally with GPS)
 go run ./apps/sosbeacon -text "injured, need help" -lat -36.85 -lon 174.76 -acc 12
+# or: -post "injured, need help" (alias, like discuss)
 ```
 
 ## Full SDK smoke test

@@ -28,6 +28,7 @@ func newTestConfig(t *testing.T, ogmPort, mgmtPort int, peerPorts []int) Config 
 	cfg.OGMBindAddr = fmt.Sprintf("127.0.0.1:%d", ogmPort)
 	cfg.ManagementAddr = fmt.Sprintf("127.0.0.1:%d", mgmtPort)
 	cfg.AppSocket = ""
+	cfg.HeartbeatAddr = ""
 	cfg.OGMInterval = 30 * time.Millisecond
 	cfg.StaleAfter = time.Hour
 	for _, p := range peerPorts {

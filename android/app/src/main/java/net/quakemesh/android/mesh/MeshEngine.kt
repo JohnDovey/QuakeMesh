@@ -18,8 +18,10 @@ object MeshEngine {
     private val transports = CopyOnWriteArrayList<Transport>()
     private var node: MeshNode? = null
     private var locationReporter: LocationReporter? = null
+    private var presenceReporter: MeshPresenceReporter? = null
 
   var statusListener: ((String) -> Unit)? = null
+  var hubHeartbeatUrl: String = ""
 
     fun start(context: Context) {
         if (node != null) return
@@ -39,11 +41,18 @@ object MeshEngine {
             transports.add(it)
             it.start()
         }
+        if (hubHeartbeatUrl.isNotBlank()) {
+            presenceReporter = MeshPresenceReporter(n.nodeId, hubHeartbeatUrl) {
+                locationReporter?.latestFix()
+            }.also { it.start() }
+        }
         statusListener?.invoke("Mesh running — node ${n.nodeId.take(12)}…")
     }
 
     fun stop() {
         MeshLocalApi.stop()
+        presenceReporter?.stop()
+        presenceReporter = null
         locationReporter?.stop()
         locationReporter = null
         transports.forEach { it.stop() }

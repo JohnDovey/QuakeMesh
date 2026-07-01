@@ -40,6 +40,7 @@ func main() {
 	flag.DurationVar(&cfg.StaleAfter, "stale-after", cfg.StaleAfter, "mark a peer stale after this long without a received OGM")
 	flag.DurationVar(&cfg.DTNTTL, "dtn-ttl", cfg.DTNTTL, "default TTL for queued DTN bundles")
 	flag.StringVar(&cfg.AppSocket, "app-socket", cfg.AppSocket, "mesh-sdk daemon listen address (unix:/path or tcp:host:port; empty disables)")
+	flag.StringVar(&cfg.HeartbeatAddr, "heartbeat-addr", cfg.HeartbeatAddr, "LAN HTTP bind for mesh node heartbeats (host:port; empty disables)")
 	flag.Parse()
 
 	if peers != "" {
