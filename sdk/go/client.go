@@ -68,7 +68,10 @@ func (c *HTTPClient) Register(appID, appName, appVersion string, capabilities []
 		return nil, err
 	}
 	c.token = out.SessionToken
-	c.session = &Session{AppID: appID, AppName: appName, AppVersion: appVersion}
+	nodeID, _ := hex.DecodeString(out.NodeID)
+	c.session = &Session{
+		AppID: appID, AppName: appName, AppVersion: appVersion, NodeID: nodeID,
+	}
 	return c.session, nil
 }
 

@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.5 - Phase 4: mesh start/stop UI wired to foreground service.
 //   0.0.10 - Phase 8: show GPS fix when mesh is running.
+//   0.0.14 - Phase 12: SDK reference demo button.
 
 package net.quakemesh.android
 
@@ -15,13 +16,16 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import net.quakemesh.android.demo.ReferenceSdkDemo
 import net.quakemesh.android.mesh.MeshEngine
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusView: TextView
     private lateinit var nodeIdView: TextView
     private lateinit var toggleButton: Button
+    private lateinit var sdkDemoButton: Button
 
     private var meshRunning = false
 
@@ -38,6 +42,7 @@ class MainActivity : AppCompatActivity() {
         statusView = findViewById(R.id.status_text)
         nodeIdView = findViewById(R.id.node_id_text)
         toggleButton = findViewById(R.id.toggle_mesh_button)
+        sdkDemoButton = findViewById(R.id.sdk_demo_button)
 
         MeshEngine.statusListener = { msg ->
             runOnUiThread {
@@ -56,6 +61,29 @@ class MainActivity : AppCompatActivity() {
                 meshRunning = true
             }
             refreshUi()
+        }
+
+        sdkDemoButton.setOnClickListener {
+            if (!meshRunning) {
+                statusView.text = getString(R.string.sdk_demo_mesh_required)
+                return@setOnClickListener
+            }
+            sdkDemoButton.isEnabled = false
+            statusView.text = getString(R.string.sdk_demo_running)
+            thread(name = "SdkDemo") {
+                val lines = StringBuilder()
+                val ok = ReferenceSdkDemo.run { line ->
+                    lines.append(line).append('\n')
+                    runOnUiThread { statusView.text = lines.toString() }
+                }
+                runOnUiThread {
+                    sdkDemoButton.isEnabled = true
+                    if (ok) {
+                        lines.append(getString(R.string.sdk_demo_ok))
+                        statusView.text = lines.toString()
+                    }
+                }
+            }
         }
 
         refreshUi()

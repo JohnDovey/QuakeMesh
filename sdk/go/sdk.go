@@ -15,6 +15,7 @@ type Session struct {
 	AppID      string
 	AppName    string
 	AppVersion string
+	NodeID     []byte // local mesh node id (hex-decoded from register response)
 }
 
 // Client is the mesh-sdk surface every app integrates against.

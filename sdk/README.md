@@ -11,3 +11,5 @@ directly. See "Application SDK and Transport-as-a-Service" in
 | [/sdk/kotlin](kotlin) | Kotlin AAR (`:meshsdk`, for Android apps) | Phase 10 HttpMeshClient |
 
 Implemented in Phase 10: local JSON HTTP API on Hub Unix socket (`unix:/tmp/quakemeshhub.sock`) and Android loopback port `18084`.
+
+Phase 12 reference apps in [/apps](../apps) and `go run ./sdk/go/cmd/meshdemo` exercise every `Client` method. See [/apps/README.md](../apps/README.md).

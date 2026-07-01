@@ -33,7 +33,10 @@ class HttpMeshClient(
             .put("capabilities", capabilities)
         val resp = post("/v1/register", body.toString(), null)
         sessionToken = resp.getString("session_token")
-        return Session(appId, appName, appVersion)
+        val nodeId = resp.optString("node_id", "").chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
+        return Session(appId, appName, appVersion, nodeId)
     }
 
     override fun send(session: Session, destNodeId: ByteArray, payload: ByteArray) {
@@ -79,8 +82,8 @@ class HttpMeshClient(
         if (!versionConstraint.isNullOrEmpty()) path += "&version_constraint=$versionConstraint"
         val resp = get(path, sessionToken)
         val arr = resp.getJSONArray("peers")
-        return (0 until arr.length()).map { hex ->
-            val s = arr.getString(it)
+        return (0 until arr.length()).map { i ->
+            val s = arr.getString(i)
             s.chunked(2).map { byte -> byte.toInt(16).toByte() }.toByteArray()
         }
     }

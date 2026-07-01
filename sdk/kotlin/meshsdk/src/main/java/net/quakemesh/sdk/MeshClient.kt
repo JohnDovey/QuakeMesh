@@ -17,6 +17,7 @@ data class Session(
     val appId: String,
     val appName: String,
     val appVersion: String,
+    val nodeId: ByteArray = byteArrayOf(),
 )
 
 interface MeshClient {
