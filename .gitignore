@@ -1,0 +1,24 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# Android / Kotlin
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.aar
+
+# General
+*.log
+.env
