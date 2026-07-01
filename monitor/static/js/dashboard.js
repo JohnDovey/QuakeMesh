@@ -1,6 +1,8 @@
 let map;
 let markers = {};
 let nodes = [];
+let routes = [];
+let graphNetwork = null;
 
 function showView(name) {
   for (const el of document.querySelectorAll('main > section')) el.classList.add('hidden');
@@ -9,6 +11,7 @@ function showView(name) {
     a.classList.toggle('active', a.dataset.view === name);
   }
   if (name === 'map') ensureMap();
+  if (name === 'graph') ensureGraph();
 }
 
 document.querySelectorAll('nav a[data-view]').forEach((a) => {
@@ -82,6 +85,74 @@ async function loadNodes() {
   nodes = await api('/api/nodes') || [];
   renderNodesTable();
   refreshMapMarkers();
+  refreshGraph();
+}
+
+async function loadRoutes() {
+  routes = await api('/api/routes') || [];
+  renderRoutesTable();
+  refreshGraph();
+}
+
+function renderRoutesTable() {
+  const tbody = document.getElementById('routes-table');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  for (const r of routes) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td title="${r.destination}">${shortId(r.destination)}</td>
+      <td title="${r.next_hop}">${shortId(r.next_hop)}</td>
+      <td>${r.hop_count}</td>
+      <td>${(r.tq ?? 0).toFixed(2)}</td>
+      <td>${r.latency_ms ?? 0}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function ensureGraph() {
+  if (graphNetwork) {
+    refreshGraph();
+    return;
+  }
+  const container = document.getElementById('network-graph');
+  if (!container || typeof vis === 'undefined') return;
+  graphNetwork = new vis.Network(container, { nodes: [], edges: [] }, {
+    physics: { stabilization: true },
+    nodes: { color: { background: '#238636', border: '#3fb950' }, font: { color: '#e7ecf1' } },
+    edges: { color: { color: '#6cb6ff' }, arrows: 'to' },
+  });
+  refreshGraph();
+}
+
+function refreshGraph() {
+  if (!graphNetwork) return;
+  const nodeMap = new Map();
+  for (const n of nodes) {
+    nodeMap.set(n.node_id, {
+      id: n.node_id,
+      label: shortId(n.node_id),
+      color: n.status === 'online' ? '#238636' : '#8b6914',
+    });
+  }
+  for (const r of routes) {
+    if (!nodeMap.has(r.destination)) {
+      nodeMap.set(r.destination, { id: r.destination, label: shortId(r.destination) });
+    }
+    if (!nodeMap.has(r.next_hop)) {
+      nodeMap.set(r.next_hop, { id: r.next_hop, label: shortId(r.next_hop) });
+    }
+  }
+  const edges = routes.map((r, i) => ({
+    id: i,
+    from: r.next_hop,
+    to: r.destination,
+    label: `tq ${(r.tq ?? 0).toFixed(2)}`,
+    title: `hops: ${r.hop_count}, latency: ${r.latency_ms}ms`,
+  }));
+  graphNetwork.setData({
+    nodes: new vis.DataSet([...nodeMap.values()]),
+    edges: new vis.DataSet(edges),
+  });
 }
 
 async function loadOverview() {
@@ -145,6 +216,7 @@ connectWS((ev) => {
   }
   if (ev.type === 'route_changed') {
     loadOverview();
+    loadRoutes();
   }
   if (ev.type === 'dtn_queue_depth_changed') {
     document.getElementById('stat-dtn').textContent = ev.dtn_depth;
@@ -155,6 +227,7 @@ connectWS((ev) => {
   try {
     await loadOverview();
     await loadNodes();
+    await loadRoutes();
     await loadRelayHubs();
   } catch (_) {
     window.location.href = '/login';

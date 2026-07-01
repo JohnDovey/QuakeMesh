@@ -33,6 +33,8 @@ type Ogm struct {
 	SequenceNumber    uint64                 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	Ttl               uint32                 `protobuf:"varint,3,opt,name=ttl,proto3" json:"ttl,omitempty"`
 	IsStartupAnnounce bool                   `protobuf:"varint,4,opt,name=is_startup_announce,json=isStartupAnnounce,proto3" json:"is_startup_announce,omitempty"` // high-priority "I'm up" variant
+	LastHopId         []byte                 `protobuf:"bytes,5,opt,name=last_hop_id,json=lastHopId,proto3" json:"last_hop_id,omitempty"`                          // rebroadcaster NodeID (empty at origin)
+	HopCount          uint32                 `protobuf:"varint,6,opt,name=hop_count,json=hopCount,proto3" json:"hop_count,omitempty"`                              // hops from originator (0 at origin)
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -95,6 +97,20 @@ func (x *Ogm) GetIsStartupAnnounce() bool {
 	return false
 }
 
+func (x *Ogm) GetLastHopId() []byte {
+	if x != nil {
+		return x.LastHopId
+	}
+	return nil
+}
+
+func (x *Ogm) GetHopCount() uint32 {
+	if x != nil {
+		return x.HopCount
+	}
+	return 0
+}
+
 // Direct-neighbour liveness ping, independent of OGM refresh cadence.
 type Hello struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -152,12 +168,14 @@ var File_ogm_proto protoreflect.FileDescriptor
 
 const file_ogm_proto_rawDesc = "" +
 	"\n" +
-	"\togm.proto\x12\x0equakemesh.wire\"\x89\x01\n" +
+	"\togm.proto\x12\x0equakemesh.wire\"\xc6\x01\n" +
 	"\x03Ogm\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\fR\x06nodeId\x12'\n" +
 	"\x0fsequence_number\x18\x02 \x01(\x04R\x0esequenceNumber\x12\x10\n" +
 	"\x03ttl\x18\x03 \x01(\rR\x03ttl\x12.\n" +
-	"\x13is_startup_announce\x18\x04 \x01(\bR\x11isStartupAnnounce\"G\n" +
+	"\x13is_startup_announce\x18\x04 \x01(\bR\x11isStartupAnnounce\x12\x1e\n" +
+	"\vlast_hop_id\x18\x05 \x01(\fR\tlastHopId\x12\x1b\n" +
+	"\thop_count\x18\x06 \x01(\rR\bhopCount\"G\n" +
 	"\x05Hello\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\fR\x06nodeId\x12%\n" +
 	"\x0fsent_at_unix_ms\x18\x02 \x01(\x03R\fsentAtUnixMsBE\n" +

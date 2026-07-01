@@ -27,3 +27,5 @@ captures/
 
 # Claude Code local session state (machine-specific, not shared)
 .claude/
+*.identity
+quakemeshhub.db

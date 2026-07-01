@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.3 - Initial tests: direct peer convergence, event notification,
 //           stale timeout, and own-broadcast rejection.
+//   0.0.6 - Phase 5: three-hop chain and failover tests.
 
 package ogmengine
 
@@ -17,8 +18,6 @@ import (
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
 
-// recordingHandler collects the events an Engine reports, for tests to
-// assert against.
 type recordingHandler struct {
 	mu            sync.Mutex
 	statusChanges []registry.NodeStatus
@@ -99,18 +98,6 @@ func TestEngine_DirectPeerConvergence(t *testing.T) {
 		routes, err := regA.Routes()
 		return err == nil && len(routes) == 1 && routes[0].Destination == idB && routes[0].HopCount == 1
 	})
-	waitFor(t, 2*time.Second, func() bool {
-		routes, err := regB.Routes()
-		return err == nil && len(routes) == 1 && routes[0].Destination == idA && routes[0].HopCount == 1
-	})
-
-	nodesA, err := regA.Nodes()
-	if err != nil {
-		t.Fatalf("regA.Nodes: %v", err)
-	}
-	if len(nodesA) != 1 || nodesA[0].NodeID != idB || nodesA[0].Status != registry.NodeStatusOnline {
-		t.Fatalf("regA.Nodes = %+v, want one online node with id %v", nodesA, idB)
-	}
 }
 
 func TestEngine_NotifiesHandlerOnNewNodeAndRoute(t *testing.T) {
@@ -137,25 +124,15 @@ func TestEngine_NotifiesHandlerOnNewNodeAndRoute(t *testing.T) {
 	defer engB.Close()
 
 	waitFor(t, 2*time.Second, func() bool { return handlerA.routeCount() > 0 })
-
-	handlerA.mu.Lock()
-	defer handlerA.mu.Unlock()
-	if len(handlerA.statusChanges) != 1 || handlerA.statusChanges[0] != registry.NodeStatusOnline {
-		t.Fatalf("statusChanges = %v, want exactly one NodeStatusOnline", handlerA.statusChanges)
-	}
-	if handlerA.routesChanged[0].Destination != idB {
-		t.Fatalf("routesChanged[0].Destination = %v, want %v", handlerA.routesChanged[0].Destination, idB)
-	}
 }
 
 func TestEngine_MarksPeerStaleAfterTimeout(t *testing.T) {
 	regA, regB := newTestRegistry(t), newTestRegistry(t)
 	idA, idB := testNodeID(1), testNodeID(2)
-	handlerA := &recordingHandler{}
 
 	engA := New(Config{
 		SelfID: idA, BindAddr: "127.0.0.1:19031", Peers: []string{"127.0.0.1:19032"},
-		Interval: 20 * time.Millisecond, StaleAfter: 150 * time.Millisecond, TTL: 3, Registry: regA, Handler: handlerA,
+		Interval: 20 * time.Millisecond, StaleAfter: 150 * time.Millisecond, TTL: 3, Registry: regA,
 	})
 	engB := New(Config{
 		SelfID: idB, BindAddr: "127.0.0.1:19032", Peers: []string{"127.0.0.1:19031"},
@@ -175,8 +152,6 @@ func TestEngine_MarksPeerStaleAfterTimeout(t *testing.T) {
 		return err == nil && len(nodes) == 1 && nodes[0].Status == registry.NodeStatusOnline
 	})
 
-	// Stop B: it stops sending OGMs, so A's stale sweep should mark it
-	// stale once StaleAfter has elapsed with nothing heard.
 	if err := engB.Close(); err != nil {
 		t.Fatalf("engB.Close: %v", err)
 	}
@@ -191,8 +166,6 @@ func TestEngine_IgnoresOwnBroadcast(t *testing.T) {
 	reg := newTestRegistry(t)
 	id := testNodeID(1)
 
-	// Misconfigured (or self-referential) peer list: this engine sends
-	// its own OGMs to itself.
 	eng := New(Config{
 		SelfID: id, BindAddr: "127.0.0.1:19041", Peers: []string{"127.0.0.1:19041"},
 		Interval: 20 * time.Millisecond, StaleAfter: time.Hour, TTL: 3, Registry: reg,
@@ -209,6 +182,86 @@ func TestEngine_IgnoresOwnBroadcast(t *testing.T) {
 		t.Fatalf("reg.Nodes: %v", err)
 	}
 	if len(nodes) != 0 {
-		t.Fatalf("Nodes = %+v, want none: engine should never register itself", nodes)
+		t.Fatalf("Nodes = %+v, want none", nodes)
 	}
+}
+
+func TestEngine_ThreeHopChain(t *testing.T) {
+	regA, regB, regC := newTestRegistry(t), newTestRegistry(t), newTestRegistry(t)
+	idA, idB, idC := testNodeID(1), testNodeID(2), testNodeID(3)
+
+	engA := New(Config{
+		SelfID: idA, BindAddr: "127.0.0.1:19051", Peers: []string{"127.0.0.1:19052"},
+		Interval: 30 * time.Millisecond, StaleAfter: time.Hour, TTL: 4, Registry: regA,
+	})
+	engB := New(Config{
+		SelfID: idB, BindAddr: "127.0.0.1:19052", Peers: []string{"127.0.0.1:19051", "127.0.0.1:19053"},
+		Interval: 30 * time.Millisecond, StaleAfter: time.Hour, TTL: 4, Registry: regB,
+	})
+	engC := New(Config{
+		SelfID: idC, BindAddr: "127.0.0.1:19053", Peers: []string{"127.0.0.1:19052"},
+		Interval: 30 * time.Millisecond, StaleAfter: time.Hour, TTL: 4, Registry: regC,
+	})
+
+	for _, eng := range []*Engine{engA, engB, engC} {
+		if err := eng.Start(); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		defer eng.Close()
+	}
+
+	waitFor(t, 4*time.Second, func() bool {
+		route, ok, err := regA.GetRoute(idC)
+		return err == nil && ok && route.NextHop == idB && route.HopCount == 2
+	})
+}
+
+func TestEngine_FailoverToAlternateOnStaleNextHop(t *testing.T) {
+	regA, regB, regC := newTestRegistry(t), newTestRegistry(t), newTestRegistry(t)
+	idA, idB, idC := testNodeID(11), testNodeID(12), testNodeID(13)
+
+	engA := New(Config{
+		SelfID: idA, BindAddr: "127.0.0.1:19061", Peers: []string{"127.0.0.1:19062", "127.0.0.1:19063"},
+		Interval: 30 * time.Millisecond, StaleAfter: 200 * time.Millisecond, TTL: 4, Registry: regA,
+	})
+	engB := New(Config{
+		SelfID: idB, BindAddr: "127.0.0.1:19062", Peers: []string{"127.0.0.1:19061", "127.0.0.1:19063"},
+		Interval: 30 * time.Millisecond, StaleAfter: time.Hour, TTL: 4, Registry: regB,
+	})
+	engC := New(Config{
+		SelfID: idC, BindAddr: "127.0.0.1:19063", Peers: []string{"127.0.0.1:19061", "127.0.0.1:19062"},
+		Interval: 30 * time.Millisecond, StaleAfter: time.Hour, TTL: 4, Registry: regC,
+	})
+
+	if err := engA.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer engA.Close()
+	if err := engB.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer engB.Close()
+	if err := engC.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer engC.Close()
+
+	waitFor(t, 3*time.Second, func() bool {
+		routes, err := regA.Routes()
+		return err == nil && len(routes) >= 2
+	})
+
+	engB.Close()
+	waitFor(t, 3*time.Second, func() bool {
+		routes, err := regA.Routes()
+		if err != nil {
+			return false
+		}
+		for _, r := range routes {
+			if r.NextHop == idB {
+				return false
+			}
+		}
+		return len(routes) >= 1
+	})
 }

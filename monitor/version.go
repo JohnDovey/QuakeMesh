@@ -6,9 +6,10 @@
 //   0.0.4 - Phase 3: HTTP dashboard, admin auth, Hub event stream,
 //           Overview + Node Map + Relay Hub list.
 //   0.0.5 - Version bump only; Phase 4 landed in /android.
+//   0.0.6 - Phase 5: Network Graph and Routes dashboard views.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.5"
+const Version = "0.0.6"

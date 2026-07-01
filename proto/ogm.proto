@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.1 - Initial scaffold.
+//   0.0.6 - Phase 5: OGM last_hop_id and hop_count for multi-hop rebroadcast.
 
 syntax = "proto3";
 
@@ -16,6 +17,8 @@ message Ogm {
   uint64 sequence_number = 2;
   uint32 ttl = 3;
   bool is_startup_announce = 4; // high-priority "I'm up" variant
+  bytes last_hop_id = 5;        // rebroadcaster NodeID (empty at origin)
+  uint32 hop_count = 6;         // hops from originator (0 at origin)
 }
 
 // Direct-neighbour liveness ping, independent of OGM refresh cadence.

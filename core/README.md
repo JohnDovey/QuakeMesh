@@ -13,7 +13,7 @@ bindings, by `/android`.
 | `simnet` | Virtual simulated-network test harness (loss/latency/peer up-down) | implemented (Phase 1) |
 | `wire` | Generated Go types from `/proto` (`go generate ./...`) | implemented (Phase 1) |
 | `transport` | Abstract `Transport` interface plugged in by host binaries | defined |
-| `routing` | BATMAN-adv-inspired OGM routing, TQ = EQ/RQ | skeleton (Phase 5) |
+| `routing` | BATMAN-adv-inspired OGM routing, TQ = EQ/RQ, route metric | implemented (Phase 5) |
 | `trust` | 0-100 trust score: longevity, proximity, endorsements | skeleton (Phase 7) |
 | `dtn` | Store-and-forward bundle queue | skeleton (Phase 6) |
 | `mobile` | gomobile-bindable Node facade for Android (`FrameSink` bridge) | implemented (Phase 4) |

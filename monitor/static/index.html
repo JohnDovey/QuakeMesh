@@ -6,12 +6,15 @@
   <title>QuakeMesh Monitor</title>
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/vendor/vis/vis-network.min.css">
 </head>
 <body>
   <header>
     <h1>QuakeMesh Monitor</h1>
     <nav>
       <a href="#overview" class="active" data-view="overview">Overview</a>
+      <a href="#routes" data-view="routes">Routes</a>
+      <a href="#graph" data-view="graph">Network Graph</a>
       <a href="#map" data-view="map">Node Map</a>
       <a href="#relay" data-view="relay">Relay Hubs</a>
       <a href="#" id="logout">Logout</a>
@@ -35,6 +38,26 @@
           <thead><tr><th>Node ID</th><th>Status</th><th>Last seen</th></tr></thead>
           <tbody id="nodes-table"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="view-routes" class="hidden">
+      <div class="panel">
+        <h2>Routes</h2>
+        <table>
+          <thead>
+            <tr><th>Destination</th><th>Next hop</th><th>Hops</th><th>TQ</th><th>Latency (ms)</th></tr>
+          </thead>
+          <tbody id="routes-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-graph" class="hidden">
+      <div class="panel">
+        <h2>Network Graph</h2>
+        <p>Nodes and active routes (next-hop edges). Updates live via WebSocket.</p>
+        <div id="network-graph" class="graph-panel"></div>
       </div>
     </section>
 
@@ -73,6 +96,7 @@
   </main>
 
   <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/vendor/vis/vis-network.min.js"></script>
   <script src="/js/common.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>

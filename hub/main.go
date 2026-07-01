@@ -4,14 +4,14 @@
 //   0.0.1 - Initial scaffold.
 //   0.0.3 - Phase 2: CLI flags wired into hubapp.Hub; runs the OGM
 //           engine and loopback management API until SIGINT/SIGTERM.
+//   0.0.6 - Phase 5: multi-hop OGM engine (no CLI changes).
 
 // Command quakemeshhub is the stable-backbone binary: registry, routing,
 // NAT relay, and Hub-to-Hub sync. See "Project Names" in /plan.md.
 //
-// Phase 2 scope: SQLite-backed registry, direct single-hop OGM routing
-// over UDP against a statically configured peer list, and the loopback
-// management API's /ws event stream. Multi-hop rebroadcast, Hub-to-Hub
-// gossip sync, and relay hub propagation are later phases.
+// Phase 2–5 scope: SQLite-backed registry, multi-hop OGM routing over UDP
+// against a statically configured peer list, and the loopback management
+// API's /ws event stream.
 package main
 
 import (

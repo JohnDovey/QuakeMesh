@@ -3,13 +3,7 @@
 // Changelog:
 //   0.0.3 - Integration test: 3 in-process hub instances on distinct
 //           localhost ports converge their OGM-based routing tables.
-//           See "Verification Strategy" /hub in /plan.md -- this
-//           exercises 3 independent Hub instances, each with its own
-//           UDP socket, SQLite file, and identity, communicating only
-//           over real network sockets on localhost. It stops short of
-//           spawning 3 separate OS processes (unnecessary complexity
-//           for what this phase needs to prove) but is otherwise the
-//           same test.
+//   0.0.6 - Phase 5: linear three-hub chain reaches hop_count 2.
 
 package hubapp
 
@@ -88,9 +82,6 @@ func TestHub_ThreeHubsConvergeRouting(t *testing.T) {
 			t.Fatalf("hub %d has %d routes, want 2 (one per other hub)", i, len(routes))
 		}
 		for _, r := range routes {
-			if r.HopCount != 1 {
-				t.Errorf("hub %d route to %v has hop_count %d, want 1 (Phase 2 is direct-only)", i, r.Destination, r.HopCount)
-			}
 			if r.Destination == h.Identity.NodeID {
 				t.Errorf("hub %d has a route to its own NodeID: %v", i, r.Destination)
 			}
@@ -104,4 +95,38 @@ func TestHub_ThreeHubsConvergeRouting(t *testing.T) {
 			t.Fatalf("hub %d has %d known nodes, want 2", i, len(nodes))
 		}
 	}
+}
+
+func TestHub_LinearThreeHopChain(t *testing.T) {
+	ogmPorts := []int{19201, 19202, 19203}
+	mgmtPorts := []int{19211, 19212, 19213}
+	peerMap := [][]int{{19202}, {19201, 19203}, {19202}}
+
+	var hubs []*Hub
+	for i := range ogmPorts {
+		cfg := newTestConfig(t, ogmPorts[i], mgmtPorts[i], peerMap[i])
+		cfg.OGMTTL = 4
+		h, err := New(cfg)
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if err := h.Start(); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		t.Cleanup(func() { h.Close() })
+		hubs = append(hubs, h)
+	}
+
+	waitFor(t, 5*time.Second, func() bool {
+		routes, err := hubs[0].Registry.Routes()
+		if err != nil {
+			return false
+		}
+		for _, r := range routes {
+			if r.HopCount == 2 {
+				return true
+			}
+		}
+		return false
+	})
 }

@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.3 - Initial registry: node_registry/routing_table access for
 //           the Phase 2 OGM engine and management API.
+//   0.0.6 - GetRoute and DeleteRoutesViaNextHop for Phase 5 failover.
 
 // Package registry provides typed access to the node_registry and
 // routing_table tables (see /core/storage) backing QuakeMeshHub.
@@ -206,4 +207,33 @@ func (r *Registry) Routes() ([]Route, error) {
 		routes = append(routes, route)
 	}
 	return routes, rows.Err()
+}
+
+// GetRoute returns the stored route to destination, if any.
+func (r *Registry) GetRoute(destination identity.NodeID) (Route, bool, error) {
+	var dstBytes, nextHopBytes []byte
+	var route Route
+	err := r.db.QueryRow(
+		`SELECT destination_node_id, next_hop_node_id, tq, latency_ms, hop_count FROM routing_table WHERE destination_node_id = ?`,
+		destination[:],
+	).Scan(&dstBytes, &nextHopBytes, &route.TQ, &route.LatencyMs, &route.HopCount)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Route{}, false, nil
+		}
+		return Route{}, false, err
+	}
+	copy(route.Destination[:], dstBytes)
+	copy(route.NextHop[:], nextHopBytes)
+	return route, true, nil
+}
+
+// DeleteRoutesViaNextHop removes every route that used nextHop as its
+// first hop (failover when a neighbor goes stale).
+func (r *Registry) DeleteRoutesViaNextHop(nextHop identity.NodeID) (int64, error) {
+	res, err := r.db.Exec(`DELETE FROM routing_table WHERE next_hop_node_id = ?`, nextHop[:])
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

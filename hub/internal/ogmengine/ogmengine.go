@@ -3,15 +3,14 @@
 // Changelog:
 //   0.0.3 - Initial Phase 2 OGM engine: direct, single-hop UDP exchange
 //           between statically configured hub peers.
+//   0.0.6 - Phase 5: multi-hop OGM rebroadcast, TQ = EQ/RQ window, Hello
+//           RTT measurement, route metric selection, and failover on stale
+//           next-hops.
 
 // Package ogmengine sends and receives OGMs (Originator Messages) over
-// UDP, maintaining node_registry/routing_table entries for
-// directly-reachable peers. See "Routing Protocol" and "Node/Hub
-// Presence and Discovery" in /plan.md.
-//
-// This is Phase 2 scope only: direct, single-hop OGM exchange between a
-// hub and a statically configured list of peer addresses. Multi-hop
-// rebroadcast and the BATMAN-adv TQ = EQ/RQ metric are Phase 5.
+// UDP, maintaining node_registry/routing_table entries for reachable
+// nodes. See "Routing Protocol" and "Node/Hub Presence and Discovery"
+// in /plan.md.
 package ogmengine
 
 import (
@@ -26,6 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/routing"
 	"github.com/JohnDovey/QuakeMesh/core/wire"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
@@ -41,37 +41,31 @@ type EventHandler interface {
 
 // Config configures an Engine.
 type Config struct {
-	// SelfID is this hub's own NodeID, sent in every OGM.
-	SelfID identity.NodeID
-	// BindAddr is the local UDP address to listen on, e.g. "127.0.0.1:9001".
-	BindAddr string
-	// Peers is the static list of other hubs' UDP addresses to send OGMs
-	// to. Automatic LAN discovery is a later phase; Phase 2 hubs are
-	// told who their peers are.
-	Peers []string
-	// Interval is how often an OGM is broadcast to every configured peer.
-	Interval time.Duration
-	// StaleAfter is how long without a received OGM before a peer is
-	// marked stale.
+	SelfID     identity.NodeID
+	BindAddr   string
+	Peers      []string
+	Interval   time.Duration
 	StaleAfter time.Duration
-	// TTL is the OGM's initial hop budget (see "Originator Messages" in
-	// /plan.md). Phase 2 hubs only observe it; they never decrement and
-	// re-flood, since that is Phase 5 multi-hop behavior.
-	TTL uint32
-
-	Registry *registry.Registry
-	// Handler is optional; nil disables event notification.
-	Handler EventHandler
+	TTL        uint32
+	Registry   *registry.Registry
+	Handler    EventHandler
 }
 
 // Engine sends and receives OGMs over UDP for a single hub.
 type Engine struct {
 	cfg  Config
 	conn *net.UDPConn
-	seq  uint64 // this hub's own OGM sequence counter
+	seq  uint64
 
-	mu      sync.Mutex
-	lastSeq map[string]uint64 // hex NodeID -> last accepted sequence number
+	mu            sync.Mutex
+	lastSeq       map[string]uint64
+	peerByAddr    map[string]identity.NodeID
+	rebroadcasted map[string]uint64
+	linkRQ        map[string]uint32
+	linkEQ        map[string]uint32
+	latencyMs     map[string]int
+	alternates    map[string][]registry.Route
+	pendingHello  map[string]time.Time
 
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
@@ -81,13 +75,19 @@ type Engine struct {
 // sending/receiving.
 func New(cfg Config) *Engine {
 	return &Engine{
-		cfg:     cfg,
-		lastSeq: make(map[string]uint64),
+		cfg:           cfg,
+		lastSeq:       make(map[string]uint64),
+		peerByAddr:    make(map[string]identity.NodeID),
+		rebroadcasted: make(map[string]uint64),
+		linkRQ:        make(map[string]uint32),
+		linkEQ:        make(map[string]uint32),
+		latencyMs:     make(map[string]int),
+		alternates:    make(map[string][]registry.Route),
+		pendingHello:  make(map[string]time.Time),
 	}
 }
 
-// Start opens the UDP socket and launches the send/receive/stale-sweep
-// goroutines. Call Close to stop them.
+// Start opens the UDP socket and launches worker goroutines.
 func (e *Engine) Start() error {
 	addr, err := net.ResolveUDPAddr("udp", e.cfg.BindAddr)
 	if err != nil {
@@ -102,10 +102,11 @@ func (e *Engine) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancel = cancel
 
-	e.wg.Add(3)
+	e.wg.Add(4)
 	go e.receiveLoop(ctx)
 	go e.sendLoop(ctx)
 	go e.staleSweepLoop(ctx)
+	go e.helloLoop(ctx)
 	return nil
 }
 
@@ -122,15 +123,14 @@ func (e *Engine) Close() error {
 	return err
 }
 
-// LocalAddr returns the engine's bound UDP address, primarily useful in
-// tests that bind to port 0 and need to learn the assigned port.
+// LocalAddr returns the engine's bound UDP address.
 func (e *Engine) LocalAddr() net.Addr {
 	return e.conn.LocalAddr()
 }
 
 func (e *Engine) sendLoop(ctx context.Context) {
 	defer e.wg.Done()
-	e.broadcastOnce() // "I'm up": send immediately on start, don't wait a full interval
+	e.broadcastOnce()
 
 	ticker := time.NewTicker(e.cfg.Interval)
 	defer ticker.Stop()
@@ -150,14 +150,22 @@ func (e *Engine) broadcastOnce() {
 		NodeId:            e.cfg.SelfID[:],
 		SequenceNumber:    seq,
 		Ttl:               e.cfg.TTL,
+		HopCount:          0,
 		IsStartupAnnounce: seq == 1,
 	}
+	e.floodOgm(msg, "")
+}
+
+func (e *Engine) floodOgm(msg *wire.Ogm, exceptAddr string) {
 	payload, err := proto.Marshal(msg)
 	if err != nil {
 		log.Printf("ogmengine: marshal OGM: %v", err)
 		return
 	}
 	for _, peerAddrStr := range e.cfg.Peers {
+		if peerAddrStr == exceptAddr {
+			continue
+		}
 		peerAddr, err := net.ResolveUDPAddr("udp", peerAddrStr)
 		if err != nil {
 			log.Printf("ogmengine: resolve peer %s: %v", peerAddrStr, err)
@@ -176,11 +184,8 @@ func (e *Engine) receiveLoop(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		// A short read deadline is how a blocking UDP read is made
-		// responsive to ctx cancellation, since net.UDPConn has no
-		// context-aware read.
 		e.conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
-		n, _, err := e.conn.ReadFromUDP(buf)
+		n, raddr, err := e.conn.ReadFromUDP(buf)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
@@ -191,58 +196,238 @@ func (e *Engine) receiveLoop(ctx context.Context) {
 			log.Printf("ogmengine: read: %v", err)
 			continue
 		}
-		e.handlePacket(buf[:n])
+		e.handlePacket(buf[:n], raddr)
 	}
 }
 
-func (e *Engine) handlePacket(data []byte) {
-	var msg wire.Ogm
-	if err := proto.Unmarshal(data, &msg); err != nil {
-		log.Printf("ogmengine: unmarshal OGM: %v", err)
+func (e *Engine) handlePacket(data []byte, raddr *net.UDPAddr) {
+	var ogm wire.Ogm
+	if err := proto.Unmarshal(data, &ogm); err == nil && len(ogm.NodeId) == len(identity.NodeID{}) {
+		e.handleOgm(&ogm, raddr)
 		return
 	}
-	if len(msg.NodeId) != len(identity.NodeID{}) {
-		return
+	var hello wire.Hello
+	if err := proto.Unmarshal(data, &hello); err == nil && len(hello.NodeId) == len(identity.NodeID{}) {
+		e.handleHello(&hello, raddr)
 	}
+}
+
+func (e *Engine) handleHello(msg *wire.Hello, raddr *net.UDPAddr) {
 	var senderID identity.NodeID
 	copy(senderID[:], msg.NodeId)
+	e.mu.Lock()
+	if sentAt, ok := e.pendingHello[raddr.String()]; ok {
+		rtt := time.Since(sentAt)
+		if rtt > 0 && rtt < 10*time.Second {
+			e.latencyMs[senderID.String()] = int(rtt.Milliseconds())
+		}
+		delete(e.pendingHello, raddr.String())
+	}
+	e.mu.Unlock()
+}
 
-	if senderID == e.cfg.SelfID {
-		return // ignore our own broadcasts, e.g. a misconfigured peer list
+func (e *Engine) handleOgm(msg *wire.Ogm, raddr *net.UDPAddr) {
+	var originID identity.NodeID
+	copy(originID[:], msg.NodeId)
+	if originID == e.cfg.SelfID {
+		if msg.HopCount > 0 {
+			forwarder := e.resolveForwarder(msg, raddr)
+			e.mu.Lock()
+			e.linkEQ[forwarder.String()]++
+			e.mu.Unlock()
+		}
+		return
 	}
 
-	key := senderID.String()
+	forwarder := e.resolveForwarder(msg, raddr)
+	addrKey := raddr.String()
+
 	e.mu.Lock()
-	last, seen := e.lastSeq[key]
+	if msg.HopCount == 0 && len(msg.LastHopId) == 0 {
+		e.peerByAddr[addrKey] = originID
+		forwarder = originID
+	}
+	e.linkRQ[forwarder.String()]++
+	originKey := originID.String()
+	last, seen := e.lastSeq[originKey]
 	if seen && msg.SequenceNumber <= last {
 		e.mu.Unlock()
-		return // replay or out-of-order: drop
+		return
 	}
-	e.lastSeq[key] = msg.SequenceNumber
+	e.lastSeq[originKey] = msg.SequenceNumber
 	e.mu.Unlock()
 
-	statusChanged, err := e.cfg.Registry.UpsertSeen(senderID, time.Now())
+	statusChanged, err := e.cfg.Registry.UpsertSeen(originID, time.Now())
 	if err != nil {
 		log.Printf("ogmengine: UpsertSeen: %v", err)
 		return
 	}
 	if statusChanged && e.cfg.Handler != nil {
-		e.cfg.Handler.NodeStatusChanged(senderID, registry.NodeStatusOnline)
+		e.cfg.Handler.NodeStatusChanged(originID, registry.NodeStatusOnline)
 	}
 
-	route := registry.Route{
-		Destination: senderID,
-		NextHop:     senderID,
-		TQ:          1.0, // Phase 5 will compute real TQ = EQ/RQ
-		LatencyMs:   0,   // not yet measured; Phase 5 adds liveness-ping RTT
-		HopCount:    1,   // Phase 2 does not relay/rebroadcast OGMs
+	hopCount := int(msg.HopCount) + 1
+	linkTQ := e.linkTQ(forwarder)
+	pathTQ := linkTQ
+	if hopCount > 1 {
+		pathTQ = routing.PathTQ(linkTQ, routing.TransmitQuality(0.85))
 	}
-	if err := e.cfg.Registry.UpsertRoute(route); err != nil {
+	latency := e.neighborLatency(forwarder)
+
+	candidate := registry.Route{
+		Destination: originID,
+		NextHop:     forwarder,
+		TQ:          float64(pathTQ),
+		LatencyMs:   latency * hopCount,
+		HopCount:    hopCount,
+	}
+	e.maybeUpsertRoute(candidate)
+
+	if msg.Ttl > 0 {
+		e.maybeRebroadcast(msg, addrKey)
+	}
+}
+
+func (e *Engine) resolveForwarder(msg *wire.Ogm, raddr *net.UDPAddr) identity.NodeID {
+	if len(msg.LastHopId) == len(identity.NodeID{}) {
+		var id identity.NodeID
+		copy(id[:], msg.LastHopId)
+		return id
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if id, ok := e.peerByAddr[raddr.String()]; ok {
+		return id
+	}
+	var originID identity.NodeID
+	copy(originID[:], msg.NodeId)
+	return originID
+}
+
+func (e *Engine) linkTQ(neighbor identity.NodeID) routing.TransmitQuality {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	key := neighbor.String()
+	return routing.ComputeTQ(e.linkEQ[key], maxUint32(e.linkRQ[key], 1))
+}
+
+func (e *Engine) neighborLatency(neighbor identity.NodeID) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if ms, ok := e.latencyMs[neighbor.String()]; ok {
+		return ms
+	}
+	return 0
+}
+
+func (e *Engine) maybeUpsertRoute(candidate registry.Route) {
+	current, has, err := e.cfg.Registry.GetRoute(candidate.Destination)
+	if err != nil {
+		log.Printf("ogmengine: GetRoute: %v", err)
+		return
+	}
+
+	cur := routing.Route{
+		DestinationNodeID: candidate.Destination,
+		NextHopNodeID:     candidate.NextHop,
+		TQ:                routing.TransmitQuality(candidate.TQ),
+		LatencyMillis:     uint32(candidate.LatencyMs),
+		HopCount:          uint32(candidate.HopCount),
+	}
+	var prev routing.Route
+	if has {
+		prev = routing.Route{
+			DestinationNodeID: current.Destination,
+			NextHopNodeID:     current.NextHop,
+			TQ:                routing.TransmitQuality(current.TQ),
+			LatencyMillis:     uint32(current.LatencyMs),
+			HopCount:          uint32(current.HopCount),
+		}
+	}
+	if has && !routing.Better(cur, prev) {
+		e.storeAlternate(candidate)
+		return
+	}
+	if has {
+		e.storeAlternate(current)
+	}
+	if err := e.cfg.Registry.UpsertRoute(candidate); err != nil {
 		log.Printf("ogmengine: UpsertRoute: %v", err)
 		return
 	}
 	if e.cfg.Handler != nil {
-		e.cfg.Handler.RouteChanged(route)
+		e.cfg.Handler.RouteChanged(candidate)
+	}
+}
+
+func (e *Engine) storeAlternate(route registry.Route) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	key := route.Destination.String()
+	alts := e.alternates[key]
+	for _, existing := range alts {
+		if existing.NextHop == route.NextHop {
+			return
+		}
+	}
+	e.alternates[key] = append(alts, route)
+	if len(e.alternates[key]) > 3 {
+		e.alternates[key] = e.alternates[key][len(e.alternates[key])-3:]
+	}
+}
+
+func (e *Engine) maybeRebroadcast(msg *wire.Ogm, fromAddr string) {
+	var originID identity.NodeID
+	copy(originID[:], msg.NodeId)
+	originKey := originID.String()
+	e.mu.Lock()
+	if msg.SequenceNumber <= e.rebroadcasted[originKey] {
+		e.mu.Unlock()
+		return
+	}
+	e.rebroadcasted[originKey] = msg.SequenceNumber
+	e.mu.Unlock()
+
+	reb := proto.Clone(msg).(*wire.Ogm)
+	reb.Ttl--
+	reb.HopCount++
+	reb.LastHopId = e.cfg.SelfID[:]
+	e.floodOgm(reb, fromAddr)
+}
+
+func (e *Engine) helloLoop(ctx context.Context) {
+	defer e.wg.Done()
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			e.sendHellos()
+		}
+	}
+}
+
+func (e *Engine) sendHellos() {
+	msg := &wire.Hello{
+		NodeId:         e.cfg.SelfID[:],
+		SentAtUnixMs:   time.Now().UnixMilli(),
+	}
+	payload, err := proto.Marshal(msg)
+	if err != nil {
+		return
+	}
+	now := time.Now()
+	for _, peerAddrStr := range e.cfg.Peers {
+		peerAddr, err := net.ResolveUDPAddr("udp", peerAddrStr)
+		if err != nil {
+			continue
+		}
+		e.mu.Lock()
+		e.pendingHello[peerAddrStr] = now
+		e.mu.Unlock()
+		_, _ = e.conn.WriteToUDP(payload, peerAddr)
 	}
 }
 
@@ -264,11 +449,48 @@ func (e *Engine) staleSweepLoop(ctx context.Context) {
 				log.Printf("ogmengine: MarkStaleBefore: %v", err)
 				continue
 			}
-			if e.cfg.Handler != nil {
-				for _, id := range stale {
+			for _, id := range stale {
+				e.failoverRoutes(id)
+				if e.cfg.Handler != nil {
 					e.cfg.Handler.NodeStatusChanged(id, registry.NodeStatusStale)
 				}
 			}
 		}
 	}
+}
+
+func (e *Engine) failoverRoutes(staleNode identity.NodeID) {
+	if _, err := e.cfg.Registry.DeleteRoutesViaNextHop(staleNode); err != nil {
+		log.Printf("ogmengine: DeleteRoutesViaNextHop: %v", err)
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for destKey, alts := range e.alternates {
+		var remaining []registry.Route
+		var promoted *registry.Route
+		for _, alt := range alts {
+			if alt.NextHop == staleNode {
+				continue
+			}
+			remaining = append(remaining, alt)
+			if promoted == nil {
+				copy := alt
+				promoted = &copy
+			}
+		}
+		if promoted != nil {
+			_ = e.cfg.Registry.UpsertRoute(*promoted)
+			if e.cfg.Handler != nil {
+				e.cfg.Handler.RouteChanged(*promoted)
+			}
+		}
+		e.alternates[destKey] = remaining
+	}
+}
+
+func maxUint32(a, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
 }
