@@ -2,9 +2,10 @@
 //
 // Changelog:
 //   0.0.1 - Initial scaffold.
+//   0.0.2 - Phase 1 (protocol & identity core landed in /core).
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.1"
+const Version = "0.0.2"

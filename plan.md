@@ -16,7 +16,7 @@ All three share `/core` (the Go mesh-core library) and `/proto` (protobuf wire s
 
 QuakeMesh is a self-contained, infrastructure-independent private mesh network. It requires no cloud services, no central servers, and no pre-existing internet access to function. QuakeMeshHub nodes form a stable backbone; QuakeMesh Android nodes act as both endpoints and multi-hop repeaters; QuakeMeshMonitor provides a real-time browser-based view of the entire network for administrators.
 
-The network auto-discovers nodes, auto-routes traffic across multiple hops, tracks physical locations, maintains per-node trust scores, and falls back to the internet only when explicitly permitted by the user. It is designed to work in the absence of any infrastructure and to degrade gracefully rather than fail when nodes disappear.
+The network auto-discovers nodes, auto-routes traffic across multiple hops, tracks physical locations, maintains per-node trust scores, and falls back to the internet only when explicitly permitted by the user. When a node or hub is connected to a local Wi-Fi network, it freely uses that LAN for mesh traffic and peer discovery — no opt-in required, and no internet access needed. It is designed to work in the absence of any infrastructure and to degrade gracefully rather than fail when nodes disappear.
 
 ---
 
@@ -92,7 +92,7 @@ A separate Kotlin Room database (`quakemesh_ui.db`) stores user preferences, not
 
 ## Transport Layer
 
-Transports are tried in priority order, direct-link first. The mesh-core sees only an abstract `Transport` interface (`Send`, `OnReceive`, `OnPeerUp`, `OnPeerDown`). Platform-specific implementations are plugged in by the host binary or Android Kotlin layer.
+Transports are tried in priority order, direct-link first. When a node or hub has an active Wi-Fi station connection to a conventional LAN (home router, office AP, campsite Wi-Fi, etc.), that network is used freely for both traffic and discovery — it is a first-class mesh transport, not a gated fallback. The mesh-core sees only an abstract `Transport` interface (`Send`, `OnReceive`, `OnPeerUp`, `OnPeerDown`). Platform-specific implementations are plugged in by the host binary or Android Kotlin layer.
 
 ### 1. Bluetooth Classic / BLE
 Universal fallback. Shortest range, lowest power. Always active for discovery beacons even when faster transports are available.
@@ -109,8 +109,13 @@ Meshrabiya should be studied before writing any transport shims — it may be di
 ### 3. Wi-Fi Aware (NAN)
 Use where supported and where the privacy trade-off is acceptable. **Treat with caution**: the API exposes scoped IPv6 addresses that standard networking libraries often fail to resolve, and service advertisements are publicly broadcast, creating device-tracking and spoofing risks. Mitigation (rotating service identifiers, limiting advertised data) is required before deploying in privacy-sensitive contexts.
 
-### 4. Local Wi-Fi / LAN
-If a node and a hub (or two hubs) share a conventional network, use plain UDP/QUIC on that LAN. No AP or router involvement beyond Layer 2.
+### 4. Local Wi-Fi / LAN (connected Wi-Fi network)
+Any node or hub that is connected to a local Wi-Fi network may freely use that network for mesh traffic and discovery. This applies to Android nodes on a home/office/campsite AP, hub processes bound to a LAN interface, and any pair of peers that share the same broadcast domain. No user permission toggle is required — using the LAN you are already joined to is distinct from routing traffic out to the public internet.
+
+- **Traffic**: mesh frames travel as plain UDP (and QUIC where appropriate) between peers on the same subnet. The router/AP forwards at Layer 3 only; no cloud relay, no NAT traversal, and no internet gateway involvement.
+- **Discovery**: nodes and hubs announce presence on the LAN via multicast UDP beacons and respond to unicast probes. A phone on the same Wi-Fi as a hub discovers and connects to that hub immediately, without needing Bluetooth or Wi-Fi Direct in range.
+- **Hub-to-Hub on LAN**: two hubs on the same network gossip directly over LAN UDP — the fastest and lowest-latency path for registry sync and relay-hub propagation.
+- **Coexistence with off-grid transports**: LAN transport runs in parallel with BLE and Wi-Fi Direct. The routing engine prefers the LAN path when link quality is good (typically lower latency and higher throughput than radio P2P), but off-grid transports remain active so nodes that leave Wi-Fi coverage stay reachable via the mesh.
 
 ### 5. Internet Fallback (Wi-Fi-to-internet or mobile data)
 Last resort. Gated by an explicit per-user opt-in permission toggle. Routed through internet-reachable hubs using the NAT traversal scheme below. The UI must make it visible when this path is active.
@@ -159,8 +164,9 @@ The relay hub list is visible and editable in QuakeMeshMonitor's Configuration s
 ## Node/Hub Presence and Discovery
 
 - On startup, a node/hub broadcasts a high-priority **"I'm up"** announcement on every available transport. This propagates hop-by-hop through the mesh and is pushed directly to any reachable hub.
-- **Steady-state liveness**: lightweight pings to one-hop neighbors every few seconds detect dropped links fast, independent of the slower OGM-based routing refresh.
-- **Re-discovery of stale nodes**: known-but-unreachable nodes are kept in the registry and probed periodically. When a lost node reappears, the network notices without requiring it to re-announce itself.
+- **LAN discovery**: when connected to a local Wi-Fi network, nodes and hubs additionally broadcast and listen for presence beacons on that LAN (multicast UDP). Any peer on the same subnet — another phone, a hub, a second hub — is discovered and reachable without radio P2P contact. LAN beacons carry the same identity and capability fields as radio announcements.
+- **Steady-state liveness**: lightweight pings to one-hop neighbors every few seconds detect dropped links fast, independent of the slower OGM-based routing refresh. LAN neighbors are pinged over UDP on the local subnet when a Wi-Fi connection is active.
+- **Re-discovery of stale nodes**: known-but-unreachable nodes are kept in the registry and probed periodically. When a lost node reappears, the network notices without requiring it to re-announce itself. If a node reconnects to a shared Wi-Fi network, LAN probes rediscover it immediately.
 
 ---
 
@@ -281,7 +287,9 @@ When an app or a specific version is found to be malicious or exploited:
 
 ## Permissions for Non-Mesh Radios
 
-Using Wi-Fi-to-internet or mobile data is a deliberate fallback, never silent. Both the hub config and the Android app require an explicit opt-in toggle before any traffic leaves over a non-mesh radio. The UI must make it clearly visible when the internet fallback path is actively in use.
+**Local Wi-Fi LAN use is always permitted.** When a node or hub is connected to a Wi-Fi network, it freely uses that LAN for mesh traffic and discovery. This is local subnet communication only — it does not require internet access and does not require a user opt-in.
+
+**Internet fallback is gated.** Routing mesh traffic out through a Wi-Fi internet gateway or over mobile data is a deliberate fallback, never silent. Both the hub config and the Android app require an explicit opt-in toggle before any traffic leaves the local network over a non-mesh internet path. The UI must make it clearly visible when the internet fallback path is actively in use.
 
 ---
 
@@ -377,7 +385,7 @@ Built on the SDK as both working software and proof that the base layer is usabl
 | **1** | **Protocol & identity core** — Ed25519 identity, SQLite schema and migrations, protobuf schemas, Noise handshake, all in `/core`; virtual simulated-network harness for testing routing/trust without real radios |
 | **2** | **QuakeMeshHub MVP** — Hub binary: SQLite-backed registry, OGM routing over UDP/LAN between multiple hub processes, loopback management API (127.0.0.1:8083) with event stream |
 | **3** | **QuakeMeshMonitor MVP** — Web server on port 8082: admin login (forced password change from default Admin/test1234), Overview dashboard + Node Map reading from Hub API and SQLite, relay hub list UI with manual add and probe |
-| **4** | **Android transports** — Study Meshrabiya source first; build/adapt Kotlin BLE + Wi-Fi Direct + Local Only Hotspot shims wired to gomobile-bound Go core; two physical phones exchanging frames across a two-hop Meshrabiya-style path |
+| **4** | **Android transports** — Study Meshrabiya source first; build/adapt Kotlin BLE + Wi-Fi Direct + Local Only Hotspot shims wired to gomobile-bound Go core; connected Wi-Fi LAN transport for traffic and discovery when joined to a local network; two physical phones exchanging frames across a two-hop Meshrabiya-style path |
 | **5** | **Multi-hop routing and failover** — 3+ node topologies; automatic route-around on node disappearance; latency/hop-count metric balancing; Network Graph and Routes views added to QuakeMeshMonitor |
 | **6** | **Store-and-forward + presence/re-discovery** — DTN bundle queue in SQLite; stale-node probing; "I'm up" propagation; DTN queue depth in Monitor Overview |
 | **7** | **Trust register** — proximity events, longevity, endorsements, Sybil dampening; Trust Scores view in Monitor; colour-coded node map markers |
@@ -433,6 +441,7 @@ Multi-hub integration test: propose ban from hub A → confirm it gossips to hub
 | Hub language | Go | Single binary, strong concurrency, no runtime on server |
 | Android mesh engine | Go core via gomobile | Code reuse, Go faster than Kotlin for crypto/compute; ~5.5 MB binary overhead is acceptable |
 | Android transport | Meshrabiya pattern (Wi-Fi Direct + Local Only Hotspot) | Proven multi-hop on stock Android without root |
+| LAN transport | Connected Wi-Fi network (UDP/QUIC on local subnet) | Free traffic and discovery when joined to any LAN; no opt-in, no internet required |
 | NAT traversal | UDP hole punch + QUIC | QUIC is UDP-based (works through punch), TLS 1.3 built in, survives IP changes |
 | Routing algorithm | BATMAN-adv-inspired OGM + TQ = EQ/RQ | No full topology flood, handles asymmetric links, self-healing |
 | Storage | `modernc.org/sqlite` (pure Go) | Works on Android via gomobile without cgo |
