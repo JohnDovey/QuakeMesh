@@ -13,6 +13,7 @@
     <h1>QuakeMesh Monitor</h1>
     <nav>
       <a href="#overview" class="active" data-view="overview">Overview</a>
+      <a href="#hubs" data-view="hubs">Hubs</a>
       <a href="#routes" data-view="routes">Routes</a>
       <a href="#graph" data-view="graph">Network Graph</a>
       <a href="#map" data-view="map">Node Map</a>
@@ -26,17 +27,40 @@
         <h2>Overview</h2>
         <div class="grid">
           <div class="stat"><div class="label">Total nodes</div><div class="value" id="stat-total">—</div></div>
-          <div class="stat"><div class="label">Online</div><div class="value" id="stat-online">—</div></div>
-          <div class="stat"><div class="label">Offline / stale</div><div class="value" id="stat-offline">—</div></div>
+          <div class="stat"><div class="label">Nodes online</div><div class="value" id="stat-online">—</div></div>
+          <div class="stat"><div class="label">Nodes offline / stale</div><div class="value" id="stat-offline">—</div></div>
+          <div class="stat"><div class="label">Total hubs</div><div class="value" id="stat-hubs-total">—</div></div>
+          <div class="stat"><div class="label">Hubs online</div><div class="value" id="stat-hubs-online">—</div></div>
+          <div class="stat"><div class="label">Hubs offline / stale</div><div class="value" id="stat-hubs-offline">—</div></div>
           <div class="stat"><div class="label">Active routes</div><div class="value" id="stat-routes">—</div></div>
           <div class="stat"><div class="label">DTN queue depth</div><div class="value" id="stat-dtn">—</div></div>
         </div>
+      </div>
+      <div class="panel">
+        <h3>Recent hubs</h3>
+        <table>
+          <thead><tr><th>Hub ID</th><th>Endpoint</th><th>Status</th><th>Last seen</th></tr></thead>
+          <tbody id="hubs-table-overview"></tbody>
+        </table>
       </div>
       <div class="panel">
         <h3>Recent nodes</h3>
         <table>
           <thead><tr><th>Node ID</th><th>Status</th><th>Last seen</th></tr></thead>
           <tbody id="nodes-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-hubs" class="hidden">
+      <div class="panel">
+        <h2>Backbone Hubs</h2>
+        <p>QuakeMeshHub instances on the network. Updates live via WebSocket.</p>
+        <table>
+          <thead>
+            <tr><th>Hub ID</th><th>Endpoint</th><th>Relay</th><th>Status</th><th>First seen</th><th>Last seen</th></tr>
+          </thead>
+          <tbody id="hubs-table"></tbody>
         </table>
       </div>
     </section>

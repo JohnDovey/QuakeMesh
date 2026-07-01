@@ -13,6 +13,7 @@ package hubapp
 import (
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/dtn"
@@ -130,6 +131,24 @@ func (h *Hub) Start() error {
 		h.API.Close()
 		return fmt.Errorf("hubapp: start OGM engine: %w", err)
 	}
+	if err := h.registerSelfHub(); err != nil {
+		return fmt.Errorf("hubapp: register self hub: %w", err)
+	}
+	return nil
+}
+
+func (h *Hub) registerSelfHub() error {
+	addr, ok := h.OGM.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return fmt.Errorf("unexpected OGM local addr type %T", h.OGM.LocalAddr())
+	}
+	changed, err := h.Registry.UpsertHubSeen(h.Identity.NodeID, addr.IP.String(), addr.Port, time.Now())
+	if err != nil {
+		return err
+	}
+	if changed {
+		h.API.HubStatusChanged(h.Identity.NodeID, registry.HubStatusOnline)
+	}
 	return nil
 }
 
@@ -147,6 +166,10 @@ type eventBridge struct {
 
 func (b *eventBridge) NodeStatusChanged(nodeID identity.NodeID, status registry.NodeStatus) {
 	b.api.NodeStatusChanged(nodeID, status)
+}
+
+func (b *eventBridge) HubStatusChanged(hubID identity.NodeID, status registry.HubStatus) {
+	b.api.HubStatusChanged(hubID, status)
 }
 
 func (b *eventBridge) RouteChanged(route registry.Route) {

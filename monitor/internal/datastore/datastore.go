@@ -3,9 +3,11 @@
 // Changelog:
 //   0.0.4 - Phase 3: read-only registry queries plus relay_hubs CRUD
 //           for the Monitor dashboard.
+//   0.0.7 - hub_registry queries; nodes exclude backbone hubs.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
-// registry (node_registry, routing_table, relay_hubs, dtq_queue).
+// registry (node_registry, hub_registry, routing_table, relay_hubs,
+// dtq_queue).
 package datastore
 
 import (
@@ -56,18 +58,36 @@ type RelayHub struct {
 	LastVerified time.Time `json:"last_verified"`
 }
 
-// Overview holds aggregate counts for the dashboard.
-type Overview struct {
-	TotalNodes   int `json:"total_nodes"`
-	OnlineNodes  int `json:"online_nodes"`
-	OfflineNodes int `json:"offline_nodes"`
-	RouteCount   int `json:"route_count"`
-	DTNDepth     int `json:"dtn_depth"`
+// Hub is a dashboard view of hub_registry.
+type Hub struct {
+	HubID        string    `json:"hub_id"`
+	LastIP       string    `json:"last_ip,omitempty"`
+	LastPort     int       `json:"last_port,omitempty"`
+	RelayCapable bool      `json:"relay_capable"`
+	Status       string    `json:"status"`
+	FirstSeen    time.Time `json:"first_seen"`
+	LastSeen     time.Time `json:"last_seen"`
 }
 
-// Nodes returns every node in the registry.
+// Overview holds aggregate counts for the dashboard.
+type Overview struct {
+	TotalNodes    int `json:"total_nodes"`
+	OnlineNodes   int `json:"online_nodes"`
+	OfflineNodes  int `json:"offline_nodes"`
+	TotalHubs     int `json:"total_hubs"`
+	OnlineHubs    int `json:"online_hubs"`
+	OfflineHubs   int `json:"offline_hubs"`
+	RouteCount    int `json:"route_count"`
+	DTNDepth      int `json:"dtn_depth"`
+}
+
+// Nodes returns mesh nodes, excluding backbone hubs in hub_registry.
 func (s *Store) Nodes() ([]Node, error) {
-	rows, err := s.db.Query(`SELECT node_id, first_seen, last_seen, last_lat, last_lon, status FROM node_registry`)
+	rows, err := s.db.Query(`
+		SELECT node_id, first_seen, last_seen, last_lat, last_lon, status
+		FROM node_registry
+		WHERE node_id NOT IN (SELECT hub_id FROM hub_registry)
+		ORDER BY last_seen DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -103,6 +123,47 @@ func (s *Store) Nodes() ([]Node, error) {
 	return nodes, rows.Err()
 }
 
+// Hubs returns every backbone hub in hub_registry.
+func (s *Store) Hubs() ([]Hub, error) {
+	rows, err := s.db.Query(`
+		SELECT hub_id, last_ip, last_port, relay_capable, first_seen, last_seen, status
+		FROM hub_registry ORDER BY last_seen DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var hubs []Hub
+	for rows.Next() {
+		var idBytes []byte
+		var ip sql.NullString
+		var port sql.NullInt64
+		var relay int
+		var firstMs, lastMs int64
+		var status string
+		if err := rows.Scan(&idBytes, &ip, &port, &relay, &firstMs, &lastMs, &status); err != nil {
+			return nil, err
+		}
+		var id identity.NodeID
+		copy(id[:], idBytes)
+		h := Hub{
+			HubID:        id.String(),
+			RelayCapable: relay != 0,
+			Status:       status,
+			FirstSeen:    time.UnixMilli(firstMs),
+			LastSeen:     time.UnixMilli(lastMs),
+		}
+		if ip.Valid {
+			h.LastIP = ip.String
+		}
+		if port.Valid {
+			h.LastPort = int(port.Int64)
+		}
+		hubs = append(hubs, h)
+	}
+	return hubs, rows.Err()
+}
+
 // Routes returns every route in the routing table.
 func (s *Store) Routes() ([]Route, error) {
 	rows, err := s.db.Query(`SELECT destination_node_id, next_hop_node_id, tq, latency_ms, hop_count FROM routing_table`)
@@ -136,13 +197,28 @@ func (s *Store) Routes() ([]Route, error) {
 // OverviewSnapshot returns current aggregate counts.
 func (s *Store) OverviewSnapshot() (Overview, error) {
 	var o Overview
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM node_registry`).Scan(&o.TotalNodes); err != nil {
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM node_registry
+		WHERE node_id NOT IN (SELECT hub_id FROM hub_registry)`).Scan(&o.TotalNodes); err != nil {
 		return o, err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM node_registry WHERE status = 'online'`).Scan(&o.OnlineNodes); err != nil {
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM node_registry
+		WHERE status = 'online' AND node_id NOT IN (SELECT hub_id FROM hub_registry)`).Scan(&o.OnlineNodes); err != nil {
 		return o, err
 	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM node_registry WHERE status != 'online'`).Scan(&o.OfflineNodes); err != nil {
+	if err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM node_registry
+		WHERE status != 'online' AND node_id NOT IN (SELECT hub_id FROM hub_registry)`).Scan(&o.OfflineNodes); err != nil {
+		return o, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM hub_registry`).Scan(&o.TotalHubs); err != nil {
+		return o, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM hub_registry WHERE status = 'online'`).Scan(&o.OnlineHubs); err != nil {
+		return o, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM hub_registry WHERE status != 'online'`).Scan(&o.OfflineHubs); err != nil {
 		return o, err
 	}
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM routing_table`).Scan(&o.RouteCount); err != nil {

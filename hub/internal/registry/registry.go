@@ -4,6 +4,7 @@
 //   0.0.3 - Initial registry: node_registry/routing_table access for
 //           the Phase 2 OGM engine and management API.
 //   0.0.6 - GetRoute and DeleteRoutesViaNextHop for Phase 5 failover.
+//   0.0.7 - hub_registry access for backbone hub tracking in Monitor.
 
 // Package registry provides typed access to the node_registry and
 // routing_table tables (see /core/storage) backing QuakeMeshHub.
@@ -236,4 +237,152 @@ func (r *Registry) DeleteRoutesViaNextHop(nextHop identity.NodeID) (int64, error
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// HubStatus mirrors hub_registry.status.
+type HubStatus string
+
+const (
+	HubStatusOnline HubStatus = "online"
+	HubStatusStale  HubStatus = "stale"
+)
+
+// Hub is a row from hub_registry.
+type Hub struct {
+	HubID        identity.NodeID
+	LastIP       string
+	LastPort     int
+	RelayCapable bool
+	FirstSeen    time.Time
+	LastSeen     time.Time
+	Status       HubStatus
+}
+
+// UpsertHubSeen records a direct backbone hub contact at seenAt, creating
+// or refreshing the hub_registry row. It reports whether status changed to
+// online (new hub or revival from stale).
+func (r *Registry) UpsertHubSeen(hubID identity.NodeID, ip string, port int, seenAt time.Time) (statusChanged bool, err error) {
+	ts := seenAt.UnixMilli()
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	var status string
+	err = tx.QueryRow(`SELECT status FROM hub_registry WHERE hub_id = ?`, hubID[:]).Scan(&status)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if _, err := tx.Exec(
+			`INSERT INTO hub_registry (hub_id, last_ip, last_port, relay_capable, first_seen, last_seen, status)
+			 VALUES (?, ?, ?, 0, ?, ?, 'online')`,
+			hubID[:], ip, port, ts, ts,
+		); err != nil {
+			return false, err
+		}
+		statusChanged = true
+	case err != nil:
+		return false, err
+	default:
+		if _, err := tx.Exec(
+			`UPDATE hub_registry SET last_ip = ?, last_port = ?, last_seen = ?, status = 'online' WHERE hub_id = ?`,
+			ip, port, ts, hubID[:],
+		); err != nil {
+			return false, err
+		}
+		statusChanged = status != string(HubStatusOnline)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return statusChanged, nil
+}
+
+// MarkHubsStaleBefore marks every online hub last seen before cutoff as
+// stale, returning the ids that changed.
+func (r *Registry) MarkHubsStaleBefore(cutoff time.Time) ([]identity.NodeID, error) {
+	cutoffMs := cutoff.UnixMilli()
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	rows, err := tx.Query(`SELECT hub_id FROM hub_registry WHERE status = 'online' AND last_seen < ?`, cutoffMs)
+	if err != nil {
+		return nil, err
+	}
+	var stale []identity.NodeID
+	for rows.Next() {
+		var idBytes []byte
+		if err := rows.Scan(&idBytes); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		var id identity.NodeID
+		copy(id[:], idBytes)
+		stale = append(stale, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	if len(stale) > 0 {
+		if _, err := tx.Exec(
+			`UPDATE hub_registry SET status = 'stale' WHERE status = 'online' AND last_seen < ?`, cutoffMs,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return stale, nil
+}
+
+// Hubs returns every row in hub_registry.
+func (r *Registry) Hubs() ([]Hub, error) {
+	rows, err := r.db.Query(
+		`SELECT hub_id, last_ip, last_port, relay_capable, first_seen, last_seen, status FROM hub_registry ORDER BY last_seen DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var hubs []Hub
+	for rows.Next() {
+		var idBytes []byte
+		var ip sql.NullString
+		var port sql.NullInt64
+		var relay int
+		var firstMs, lastMs int64
+		var status string
+		if err := rows.Scan(&idBytes, &ip, &port, &relay, &firstMs, &lastMs, &status); err != nil {
+			return nil, err
+		}
+		var id identity.NodeID
+		copy(id[:], idBytes)
+		h := Hub{
+			HubID:        id,
+			RelayCapable: relay != 0,
+			FirstSeen:    time.UnixMilli(firstMs),
+			LastSeen:     time.UnixMilli(lastMs),
+			Status:       HubStatus(status),
+		}
+		if ip.Valid {
+			h.LastIP = ip.String
+		}
+		if port.Valid {
+			h.LastPort = int(port.Int64)
+		}
+		hubs = append(hubs, h)
+	}
+	return hubs, rows.Err()
 }

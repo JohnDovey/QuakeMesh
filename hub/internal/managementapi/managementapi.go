@@ -168,6 +168,19 @@ func (s *Server) NodeStatusChanged(nodeID identity.NodeID, status registry.NodeS
 	})
 }
 
+// HubStatusChanged implements ogmengine.EventHandler.
+func (s *Server) HubStatusChanged(hubID identity.NodeID, status registry.HubStatus) {
+	s.Publish(&wire.ManagementEvent{
+		EmittedAtUnixMs: time.Now().UnixMilli(),
+		Event: &wire.ManagementEvent_HubStatusChanged{
+			HubStatusChanged: &wire.HubStatusChanged{
+				HubId:  hubID[:],
+				Status: string(status),
+			},
+		},
+	})
+}
+
 // RouteChanged implements ogmengine.EventHandler.
 func (s *Server) RouteChanged(route registry.Route) {
 	s.Publish(&wire.ManagementEvent{

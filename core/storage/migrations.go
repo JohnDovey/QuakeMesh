@@ -7,6 +7,8 @@
 //           OGM exchange learns of a peer's NodeID (a pubkey hash) long
 //           before it learns the actual pubkey bytes, so the column can
 //           no longer be NOT NULL.
+//   0.0.7 - migration3: hub_registry gains first_seen, last_seen, and
+//           status so QuakeMeshMonitor can track backbone hubs like nodes.
 
 package storage
 
@@ -16,6 +18,7 @@ package storage
 var Migrations = []Migration{
 	{Version: 1, SQL: migration1},
 	{Version: 2, SQL: migration2},
+	{Version: 3, SQL: migration3},
 }
 
 // migration1 creates every table listed in "Storage - SQLite Everywhere"
@@ -151,4 +154,21 @@ INSERT INTO node_registry_v2 (node_id, pubkey, first_seen, last_seen, last_lat, 
 	SELECT node_id, pubkey, first_seen, last_seen, last_lat, last_lon, status FROM node_registry;
 DROP TABLE node_registry;
 ALTER TABLE node_registry_v2 RENAME TO node_registry;
+`
+
+// migration3 extends hub_registry with liveness fields for Monitor.
+const migration3 = `
+CREATE TABLE hub_registry_v2 (
+	hub_id        BLOB PRIMARY KEY,
+	last_ip       TEXT,
+	last_port     INTEGER,
+	relay_capable INTEGER NOT NULL DEFAULT 0,
+	first_seen    INTEGER NOT NULL,
+	last_seen     INTEGER NOT NULL,
+	status        TEXT NOT NULL
+);
+INSERT INTO hub_registry_v2 (hub_id, last_ip, last_port, relay_capable, first_seen, last_seen, status)
+	SELECT hub_id, last_ip, last_port, relay_capable, 0, 0, 'online' FROM hub_registry;
+DROP TABLE hub_registry;
+ALTER TABLE hub_registry_v2 RENAME TO hub_registry;
 `

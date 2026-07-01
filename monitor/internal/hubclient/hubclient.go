@@ -28,6 +28,7 @@ type Event struct {
 
 	EmittedAtUnixMs int64   `json:"emitted_at_unix_ms,omitempty"`
 	NodeID          string  `json:"node_id,omitempty"`
+	HubID           string  `json:"hub_id,omitempty"`
 	Status          string  `json:"status,omitempty"`
 	Destination     string  `json:"destination,omitempty"`
 	NextHop         string  `json:"next_hop,omitempty"`
@@ -152,6 +153,13 @@ func translateEvent(mgmt *wire.ManagementEvent) (Event, bool) {
 			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
 			NodeID:          nodeIDString(e.NodeStatusChanged.NodeId),
 			Status:          e.NodeStatusChanged.Status,
+		}, true
+	case *wire.ManagementEvent_HubStatusChanged:
+		return Event{
+			Type:            "hub_status_changed",
+			EmittedAtUnixMs: mgmt.EmittedAtUnixMs,
+			HubID:           nodeIDString(e.HubStatusChanged.HubId),
+			Status:          e.HubStatusChanged.Status,
 		}, true
 	case *wire.ManagementEvent_RouteChanged:
 		return Event{

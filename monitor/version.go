@@ -8,9 +8,10 @@
 //   0.0.5 - Version bump only; Phase 4 landed in /android.
 //   0.0.6 - Phase 5: Network Graph and Routes dashboard views.
 //   0.0.7 - Phase 6: live DTN queue depth (non-expired bundles only).
+//   0.0.8 - Backbone hub tracking: /api/hubs, overview hub counts.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.7"
+const Version = "0.0.8"

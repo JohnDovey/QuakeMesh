@@ -19,7 +19,13 @@ message ManagementEvent {
     NodeStatusChanged node_status_changed = 2;
     RouteChanged route_changed = 3;
     DtnQueueDepthChanged dtn_queue_depth_changed = 4;
+    HubStatusChanged hub_status_changed = 5;
   }
+}
+
+message HubStatusChanged {
+  bytes hub_id = 1;
+  string status = 2;
 }
 
 message NodeStatusChanged {

@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.4 - Phase 3: HTTP server, REST API, browser /ws push, and
 //           embedded static dashboard assets.
+//   0.0.7 - /api/hubs and hub counts in overview snapshot.
 
 package server
 
@@ -65,6 +66,7 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/change-password", s.handleChangePassword)
 	mux.HandleFunc("/api/overview", s.requireAuth(s.handleOverview))
 	mux.HandleFunc("/api/nodes", s.requireAuth(s.handleNodes))
+	mux.HandleFunc("/api/hubs", s.requireAuth(s.handleHubs))
 	mux.HandleFunc("/api/routes", s.requireAuth(s.handleRoutes))
 	mux.HandleFunc("/api/relay-hubs", s.requireAuth(s.handleRelayHubs))
 	mux.HandleFunc("/api/relay-hubs/", s.requireAuth(s.handleRelayHubAction))
@@ -236,6 +238,19 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, nodes)
 }
 
+func (s *Server) handleHubs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	hubs, err := s.cfg.Data.Hubs()
+	if err != nil {
+		http.Error(w, "hubs query failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, hubs)
+}
+
 func (s *Server) handleRoutes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -345,12 +360,15 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// Push an initial overview snapshot on connect.
 	if o, err := s.cfg.Data.OverviewSnapshot(); err == nil {
 		_ = conn.WriteJSON(map[string]any{
-			"type":          "overview_snapshot",
-			"total_nodes":   o.TotalNodes,
-			"online_nodes":  o.OnlineNodes,
-			"offline_nodes": o.OfflineNodes,
-			"route_count":   o.RouteCount,
-			"dtn_depth":     o.DTNDepth,
+			"type":           "overview_snapshot",
+			"total_nodes":    o.TotalNodes,
+			"online_nodes":   o.OnlineNodes,
+			"offline_nodes":  o.OfflineNodes,
+			"total_hubs":     o.TotalHubs,
+			"online_hubs":    o.OnlineHubs,
+			"offline_hubs":   o.OfflineHubs,
+			"route_count":    o.RouteCount,
+			"dtn_depth":      o.DTNDepth,
 		})
 	}
 

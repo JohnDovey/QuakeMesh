@@ -30,6 +30,8 @@ func (h *recordingHandler) NodeStatusChanged(nodeID identity.NodeID, status regi
 	h.statusChanges = append(h.statusChanges, status)
 }
 
+func (h *recordingHandler) HubStatusChanged(hubID identity.NodeID, status registry.HubStatus) {}
+
 func (h *recordingHandler) RouteChanged(route registry.Route) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

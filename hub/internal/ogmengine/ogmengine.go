@@ -7,6 +7,7 @@
 //           RTT measurement, route metric selection, and failover on stale
 //           next-hops.
 //   0.0.7 - Phase 6: stale-node probing, revival "I'm up" rebroadcast.
+//   0.0.7 - Register direct peer hubs in hub_registry; hub stale sweep.
 
 // Package ogmengine sends and receives OGMs (Originator Messages) over
 // UDP, maintaining node_registry/routing_table entries for reachable
@@ -37,6 +38,7 @@ import (
 // to depend on that one.
 type EventHandler interface {
 	NodeStatusChanged(nodeID identity.NodeID, status registry.NodeStatus)
+	HubStatusChanged(hubID identity.NodeID, status registry.HubStatus)
 	RouteChanged(route registry.Route)
 }
 
@@ -283,6 +285,10 @@ func (e *Engine) handleOgm(msg *wire.Ogm, raddr *net.UDPAddr) {
 	e.lastSeq[originKey] = msg.SequenceNumber
 	e.mu.Unlock()
 
+	if msg.HopCount == 0 && originID != e.cfg.SelfID {
+		e.upsertPeerHub(originID, raddr)
+	}
+
 	statusChanged, err := e.cfg.Registry.UpsertSeen(originID, time.Now())
 	if err != nil {
 		log.Printf("ogmengine: UpsertSeen: %v", err)
@@ -519,7 +525,28 @@ func (e *Engine) staleSweepLoop(ctx context.Context) {
 					e.cfg.Handler.NodeStatusChanged(id, registry.NodeStatusStale)
 				}
 			}
+			staleHubs, err := e.cfg.Registry.MarkHubsStaleBefore(time.Now().Add(-e.cfg.StaleAfter))
+			if err != nil {
+				log.Printf("ogmengine: MarkHubsStaleBefore: %v", err)
+				continue
+			}
+			for _, id := range staleHubs {
+				if e.cfg.Handler != nil {
+					e.cfg.Handler.HubStatusChanged(id, registry.HubStatusStale)
+				}
+			}
 		}
+	}
+}
+
+func (e *Engine) upsertPeerHub(hubID identity.NodeID, raddr *net.UDPAddr) {
+	changed, err := e.cfg.Registry.UpsertHubSeen(hubID, raddr.IP.String(), raddr.Port, time.Now())
+	if err != nil {
+		log.Printf("ogmengine: UpsertHubSeen: %v", err)
+		return
+	}
+	if changed && e.cfg.Handler != nil {
+		e.cfg.Handler.HubStatusChanged(hubID, registry.HubStatusOnline)
 	}
 }
 

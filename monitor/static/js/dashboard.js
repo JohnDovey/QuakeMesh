@@ -1,6 +1,8 @@
 let map;
 let markers = {};
 let nodes = [];
+let hubs = [];
+let hubIds = new Set();
 let routes = [];
 let graphNetwork = null;
 
@@ -25,8 +27,40 @@ function applyOverview(o) {
   document.getElementById('stat-total').textContent = o.total_nodes ?? o.TotalNodes ?? '0';
   document.getElementById('stat-online').textContent = o.online_nodes ?? o.OnlineNodes ?? '0';
   document.getElementById('stat-offline').textContent = o.offline_nodes ?? o.OfflineNodes ?? '0';
+  document.getElementById('stat-hubs-total').textContent = o.total_hubs ?? o.TotalHubs ?? '0';
+  document.getElementById('stat-hubs-online').textContent = o.online_hubs ?? o.OnlineHubs ?? '0';
+  document.getElementById('stat-hubs-offline').textContent = o.offline_hubs ?? o.OfflineHubs ?? '0';
   document.getElementById('stat-routes').textContent = o.route_count ?? o.RouteCount ?? '0';
   document.getElementById('stat-dtn').textContent = o.dtn_depth ?? o.DTNDepth ?? '0';
+}
+
+function hubEndpoint(h) {
+  if (h.last_ip && h.last_port) return `${h.last_ip}:${h.last_port}`;
+  return '—';
+}
+
+function renderHubsTable(tbodyId, detailed) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  for (const h of hubs) {
+    const tr = document.createElement('tr');
+    const cls = h.status === 'online' ? 'status-online' : 'status-stale';
+    if (detailed) {
+      tr.innerHTML = `<td class="kind-hub" title="${h.hub_id}">${shortId(h.hub_id)}</td>
+        <td>${hubEndpoint(h)}</td>
+        <td>${h.relay_capable ? 'yes' : 'no'}</td>
+        <td class="${cls}">${h.status}</td>
+        <td>${new Date(h.first_seen).toLocaleString()}</td>
+        <td>${new Date(h.last_seen).toLocaleString()}</td>`;
+    } else {
+      tr.innerHTML = `<td class="kind-hub" title="${h.hub_id}">${shortId(h.hub_id)}</td>
+        <td>${hubEndpoint(h)}</td>
+        <td class="${cls}">${h.status}</td>
+        <td>${new Date(h.last_seen).toLocaleString()}</td>`;
+    }
+    tbody.appendChild(tr);
+  }
 }
 
 function renderNodesTable() {
@@ -88,6 +122,14 @@ async function loadNodes() {
   refreshGraph();
 }
 
+async function loadHubs() {
+  hubs = await api('/api/hubs') || [];
+  hubIds = new Set(hubs.map((h) => h.hub_id));
+  renderHubsTable('hubs-table-overview', false);
+  renderHubsTable('hubs-table', true);
+  refreshGraph();
+}
+
 async function loadRoutes() {
   routes = await api('/api/routes') || [];
   renderRoutesTable();
@@ -127,19 +169,39 @@ function ensureGraph() {
 function refreshGraph() {
   if (!graphNetwork) return;
   const nodeMap = new Map();
+  for (const h of hubs) {
+    nodeMap.set(h.hub_id, {
+      id: h.hub_id,
+      label: shortId(h.hub_id),
+      shape: 'diamond',
+      color: h.status === 'online'
+        ? { background: '#1f6feb', border: '#6cb6ff' }
+        : { background: '#3d4f7a', border: '#6e7681' },
+      title: `hub · ${h.status}`,
+    });
+  }
   for (const n of nodes) {
     nodeMap.set(n.node_id, {
       id: n.node_id,
       label: shortId(n.node_id),
       color: n.status === 'online' ? '#238636' : '#8b6914',
+      title: `node · ${n.status}`,
     });
   }
   for (const r of routes) {
     if (!nodeMap.has(r.destination)) {
-      nodeMap.set(r.destination, { id: r.destination, label: shortId(r.destination) });
+      nodeMap.set(r.destination, {
+        id: r.destination,
+        label: shortId(r.destination),
+        shape: hubIds.has(r.destination) ? 'diamond' : 'ellipse',
+      });
     }
     if (!nodeMap.has(r.next_hop)) {
-      nodeMap.set(r.next_hop, { id: r.next_hop, label: shortId(r.next_hop) });
+      nodeMap.set(r.next_hop, {
+        id: r.next_hop,
+        label: shortId(r.next_hop),
+        shape: hubIds.has(r.next_hop) ? 'diamond' : 'ellipse',
+      });
     }
   }
   const edges = routes.map((r, i) => ({
@@ -214,6 +276,10 @@ connectWS((ev) => {
     loadNodes();
     loadOverview();
   }
+  if (ev.type === 'hub_status_changed') {
+    loadHubs();
+    loadOverview();
+  }
   if (ev.type === 'route_changed') {
     loadOverview();
     loadRoutes();
@@ -226,6 +292,7 @@ connectWS((ev) => {
 (async function init() {
   try {
     await loadOverview();
+    await loadHubs();
     await loadNodes();
     await loadRoutes();
     await loadRelayHubs();
