@@ -8,9 +8,9 @@ See also [/Philosophy.md](Philosophy.md) for why this project exists.
 
 | Path | What | Status |
 |---|---|---|
-| [/core](core) | Go mesh-core library: identity, routing, trust, DTN, transport, storage | scaffold |
-| [/hub](hub) | `QuakeMeshHub` binary | scaffold |
-| [/monitor](monitor) | `QuakeMeshMonitor` binary | scaffold |
+| [/core](core) | Go mesh-core library: identity, routing, trust, DTN, transport, storage | Phase 1 complete |
+| [/hub](hub) | `QuakeMeshHub` binary | Phase 2 MVP |
+| [/monitor](monitor) | `QuakeMeshMonitor` binary | Phase 3 MVP (auth, overview, map, relay hubs) |
 | [/android](android) | `QuakeMesh` Android node app | scaffold, builds (`:app:assembleDebug`) |
 | [/proto](proto) | Shared protobuf wire schemas | scaffold, codegen verified |
 | [/sdk](sdk) | Mesh-as-a-transport SDK (Go + Kotlin) | scaffold |

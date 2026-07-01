@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuakeMesh Monitor — Login</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main>
+    <div class="panel auth-card">
+      <h1>QuakeMesh Monitor</h1>
+      <p>Sign in to administer the mesh network.</p>
+      <div id="error" class="error hidden"></div>
+      <form id="login-form">
+        <label for="username">Username</label>
+        <input id="username" name="username" value="Admin" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
+  </main>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('error');
+      err.classList.add('hidden');
+      const body = {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      };
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 429) {
+          err.textContent = 'Too many failed attempts. Wait 60 seconds and try again.';
+          err.classList.remove('hidden');
+          return;
+        }
+        if (!res.ok) {
+          err.textContent = 'Invalid username or password.';
+          err.classList.remove('hidden');
+          return;
+        }
+        const data = await res.json();
+        window.location.href = data.must_change_password ? '/change-password' : '/';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

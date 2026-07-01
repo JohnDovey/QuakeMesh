@@ -1,12 +1,79 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><title>QuakeMeshMonitor</title></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuakeMesh Monitor</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+</head>
 <body>
-<!-- Placeholder. Real dashboard (Overview, Node Map, Network Graph, Routes,
-     Hop Timing, App Stats, Trust Scores, History) is Phase 3+ work.
-     See "QuakeMeshMonitor" in /plan.md. Vendored Leaflet.js/Chart.js/vis.js
-     will be embedded here, no build step, no Node.js required. -->
-<h1>QuakeMeshMonitor</h1>
-<p>Scaffold only, not yet implemented.</p>
+  <header>
+    <h1>QuakeMesh Monitor</h1>
+    <nav>
+      <a href="#overview" class="active" data-view="overview">Overview</a>
+      <a href="#map" data-view="map">Node Map</a>
+      <a href="#relay" data-view="relay">Relay Hubs</a>
+      <a href="#" id="logout">Logout</a>
+    </nav>
+  </header>
+  <main>
+    <section id="view-overview">
+      <div class="panel">
+        <h2>Overview</h2>
+        <div class="grid">
+          <div class="stat"><div class="label">Total nodes</div><div class="value" id="stat-total">—</div></div>
+          <div class="stat"><div class="label">Online</div><div class="value" id="stat-online">—</div></div>
+          <div class="stat"><div class="label">Offline / stale</div><div class="value" id="stat-offline">—</div></div>
+          <div class="stat"><div class="label">Active routes</div><div class="value" id="stat-routes">—</div></div>
+          <div class="stat"><div class="label">DTN queue depth</div><div class="value" id="stat-dtn">—</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Recent nodes</h3>
+        <table>
+          <thead><tr><th>Node ID</th><th>Status</th><th>Last seen</th></tr></thead>
+          <tbody id="nodes-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-map" class="hidden">
+      <div class="panel">
+        <h2>Node Map</h2>
+        <p>Nodes with GPS coordinates appear on the map. Others are listed below.</p>
+        <div id="map"></div>
+        <h3>Nodes without GPS</h3>
+        <ul id="no-gps-list"></ul>
+      </div>
+    </section>
+
+    <section id="view-relay" class="hidden">
+      <div class="panel">
+        <h2>Relay Hub List</h2>
+        <form id="add-relay" class="form-row">
+          <div>
+            <label for="relay-ip">IP</label>
+            <input id="relay-ip" placeholder="203.0.113.10" required>
+          </div>
+          <div>
+            <label for="relay-port">Port</label>
+            <input id="relay-port" type="number" min="1" max="65535" placeholder="47222" required>
+          </div>
+          <button type="submit">Add &amp; probe</button>
+        </form>
+        <table>
+          <thead>
+            <tr><th>IP</th><th>Port</th><th>Source</th><th>Last verified</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="relay-table"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/dashboard.js"></script>
 </body>
 </html>

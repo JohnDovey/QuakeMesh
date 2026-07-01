@@ -1,16 +1,38 @@
 # /monitor
 
-`QuakeMeshMonitor` — standalone Go binary, browser-based admin dashboard
-for a QuakeMeshHub. Reads the Hub's loopback management API
-(`127.0.0.1:8083`) for live events and the Hub's SQLite file directly
-(read-only) for history. Default bind `0.0.0.0:8082`, override via
-`QUAKEMESH_MONITOR_PORT`.
+`QuakeMeshMonitor` — the web-based admin and monitoring dashboard that
+runs alongside a QuakeMeshHub. See "QuakeMeshMonitor" in [/plan.md](../plan.md).
 
-All frontend assets (`static/`) are embedded via `//go:embed` — no external
-files, no Node.js build step, works offline.
+## Phase 3 scope (implemented)
 
-Not yet implemented — scaffold only (Phase 3 in [/plan.md](../plan.md)).
+- HTTP server on `0.0.0.0:8082` (override with `-bind` or `QUAKEMESH_MONITOR_PORT`)
+- Embedded static assets (`go:embed`) including Leaflet.js — works offline except map tiles
+- Session-based admin login (`Admin` / `test1234` on first run, forced password change)
+- Login rate limiting (5 failures → 60 s lockout)
+- Overview dashboard with live counts via browser `/ws`
+- Node Map (Leaflet) for nodes with GPS coordinates
+- Relay hub list: manual add, TCP probe, remove
+- Subscribes to QuakeMeshHub's loopback management API (`127.0.0.1:8083/ws`)
+- Reads/writes `quakemeshhub.db` (shared with the Hub)
+
+## Run
+
+Start a Hub first, then the Monitor pointing at the same database:
 
 ```sh
-go run .
+# terminal 1
+cd hub && go run . -db /tmp/quakemeshhub.db
+
+# terminal 2
+cd monitor && go run . -hub-db /tmp/quakemeshhub.db
 ```
+
+Open `http://localhost:8082`, sign in as `Admin` / `test1234`, and set a new password.
+
+## Tests
+
+```sh
+cd monitor && go test ./...
+```
+
+Later phases add Network Graph, Routes, Trust Scores, History, Ban List, and HTTPS.
