@@ -11,7 +11,7 @@ See also [/Philosophy.md](Philosophy.md) for why this project exists.
 | [/core](core) | Go mesh-core library: identity, routing, trust, DTN, transport, storage | Phase 1 complete |
 | [/hub](hub) | `QuakeMeshHub` binary | Phase 2 MVP |
 | [/monitor](monitor) | `QuakeMeshMonitor` binary | Phase 3 MVP (auth, overview, map, relay hubs) |
-| [/android](android) | `QuakeMesh` Android node app | scaffold, builds (`:app:assembleDebug`) |
+| [/android](android) | `QuakeMesh` Android node app | Phase 4 MVP (transports + foreground service) |
 | [/proto](proto) | Shared protobuf wire schemas | scaffold, codegen verified |
 | [/sdk](sdk) | Mesh-as-a-transport SDK (Go + Kotlin) | scaffold |
 | [/docs](docs) | Protocol spec, SQLite schema reference, Monitor API spec | placeholder |

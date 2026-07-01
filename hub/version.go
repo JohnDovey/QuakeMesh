@@ -6,9 +6,10 @@
 //   0.0.3 - Phase 2: SQLite registry, OGM routing engine, loopback
 //           management API.
 //   0.0.4 - Version bump only; Phase 3 landed in /monitor.
+//   0.0.5 - Version bump only; Phase 4 landed in /android.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.4"
+const Version = "0.0.5"

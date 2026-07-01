@@ -16,6 +16,7 @@ bindings, by `/android`.
 | `routing` | BATMAN-adv-inspired OGM routing, TQ = EQ/RQ | skeleton (Phase 5) |
 | `trust` | 0-100 trust score: longevity, proximity, endorsements | skeleton (Phase 7) |
 | `dtn` | Store-and-forward bundle queue | skeleton (Phase 6) |
+| `mobile` | gomobile-bindable Node facade for Android (`FrameSink` bridge) | implemented (Phase 4) |
 
 Run tests: `go test ./...` (from `/core` or the repo root via the `go.work`
 workspace).

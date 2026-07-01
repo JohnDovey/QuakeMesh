@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">QuakeMesh</string>
+    <string name="start_mesh">Start mesh</string>
+    <string name="stop_mesh">Stop mesh</string>
+    <string name="mesh_stopped">Mesh stopped</string>
+    <string name="node_id_label">Node ID: %1$s</string>
+    <string name="node_id_unknown">Node ID: (start mesh)</string>
+    <string name="phase4_hint">Participating in the mesh keeps a foreground notification visible and uses LAN, BLE, and Wi-Fi Direct transports when available. Run ./gomobile-bind.sh after installing the Android NDK to bind the Go core.</string>
 </resources>
