@@ -15,9 +15,10 @@
 //   0.0.23 - Fix blank dashboard: auto-resolve hub DB path and resilient boot.
 //   0.0.24 - Sync overview tables when WebSocket counts arrive before table loaders.
 //   0.0.25 - Reload hub tables when nodes refresh; heal partial hub table renders.
+//   1.0.0 - First public release.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.25"
+const Version = "1.0.0"

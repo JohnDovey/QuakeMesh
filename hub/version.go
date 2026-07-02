@@ -12,9 +12,10 @@
 //   0.0.8 - hub_registry liveness; HubStatusChanged management events.
 //   0.0.9 - Phase 7: hub-observed proximity events for trust scoring.
 //   0.0.10 - Phase 8: GPS fields on OGM; UpdateLocation in registry.
+//   1.0.0 - First public release.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.16"
+const Version = "1.0.0"

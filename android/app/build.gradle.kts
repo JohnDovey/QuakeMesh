@@ -11,8 +11,8 @@ android {
         applicationId = "net.quakemesh.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.0.27"
+        versionCode = 100
+        versionName = "1.0.0"
     }
 
     buildFeatures {
