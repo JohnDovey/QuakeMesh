@@ -59,15 +59,6 @@ function showView(name) {
   if (name === 'hop-timing') loadHopLatency();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  for (const a of document.querySelectorAll('a[data-view]')) {
-    a.addEventListener('click', (e) => {
-      e.preventDefault();
-      showView(a.dataset.view);
-    });
-  }
-});
-
 function applyOverview(o) {
   document.getElementById('stat-total').textContent = o.total_nodes ?? o.TotalNodes ?? '0';
   document.getElementById('stat-online').textContent = o.online_nodes ?? o.OnlineNodes ?? '0';
@@ -79,6 +70,16 @@ function applyOverview(o) {
   document.getElementById('stat-dtn').textContent = o.dtn_depth ?? o.DTNDepth ?? '0';
   const fb = o.internet_fallback_enabled ?? o.InternetFallback;
   if (fb != null) setFallbackUI(!!fb);
+  refreshOverviewTablesIfNeeded();
+}
+
+function refreshOverviewTablesIfNeeded() {
+  const hubRows = document.getElementById('hubs-table-overview')?.rows.length ?? 0;
+  const nodeRows = document.getElementById('nodes-table')?.rows.length ?? 0;
+  const hubTotal = parseInt(document.getElementById('stat-hubs-total')?.textContent ?? '0', 10);
+  const nodeTotal = parseInt(document.getElementById('stat-total')?.textContent ?? '0', 10);
+  if (hubTotal > 0 && hubRows === 0) loadHubs();
+  if (nodeTotal > 0 && nodeRows === 0) loadNodes();
 }
 
 function setFallbackUI(enabled) {
@@ -110,6 +111,10 @@ function trustClass(score) {
   return 'trust-red';
 }
 
+function formatCoord(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(5) : '—';
+}
+
 function renderHubsTable(tbodyId, detailed) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -118,8 +123,8 @@ function renderHubsTable(tbodyId, detailed) {
     const tr = document.createElement('tr');
     const cls = h.status === 'online' ? 'status-online' : 'status-stale';
     if (detailed) {
-      const lat = h.lat != null ? h.lat.toFixed(5) : '—';
-      const lon = h.lon != null ? h.lon.toFixed(5) : '—';
+      const lat = formatCoord(h.lat);
+      const lon = formatCoord(h.lon);
       const endorseBtn = h.local_hub_endorsed
         ? '<span class="status-online">endorsed</span>'
         : `<button type="button" class="btn btn-secondary btn-sm hub-endorse" data-id="${h.hub_id}">Endorse</button>`;
@@ -153,6 +158,7 @@ function renderHubsTable(tbodyId, detailed) {
 
 function renderNodesTable() {
   const tbody = document.getElementById('nodes-table');
+  if (!tbody) return;
   tbody.innerHTML = '';
   for (const n of nodes) {
     const tr = document.createElement('tr');
@@ -328,21 +334,33 @@ async function loadOrphanHints() {
 }
 
 async function loadNodes() {
-  nodes = await api('/api/nodes') || [];
+  const data = await api('/api/nodes');
+  nodes = Array.isArray(data) ? data : [];
   renderNodesTable();
   refreshMapMarkers();
   refreshGraph();
 }
 
 async function loadHubs() {
-  hubs = await api('/api/hubs') || [];
-  hubIds = new Set(hubs.map((h) => h.hub_id));
-  renderHubsTable('hubs-table-overview', false);
-  renderHubsTable('hubs-table', true);
-  renderMapHubList();
-  refreshGraph();
-  refreshHubMapMarkers();
-  fitMapToVisibleMarkers();
+  const data = await api('/api/hubs');
+  hubs = Array.isArray(data) ? data : [];
+  hubIds = new Set(hubs.map((h) => h.hub_id).filter(Boolean));
+  try {
+    renderHubsTable('hubs-table-overview', false);
+  } catch (err) {
+    console.error('render overview hubs:', err);
+    showBootError(err);
+  }
+  try {
+    renderHubsTable('hubs-table', true);
+    renderMapHubList();
+    refreshGraph();
+    refreshHubMapMarkers();
+    fitMapToVisibleMarkers();
+  } catch (err) {
+    console.error('render hub views:', err);
+    showBootError(err);
+  }
 }
 
 function renderMapHubList() {
@@ -1016,6 +1034,18 @@ async function bootDashboard() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function startDashboard() {
+  for (const a of document.querySelectorAll('a[data-view]')) {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      showView(a.dataset.view);
+    });
+  }
   bootDashboard();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startDashboard);
+} else {
+  startDashboard();
+}

@@ -13,9 +13,10 @@
 //   0.0.10 - Phase 8: orphan direction hints on Node Map; timezone in times.
 //   0.0.22 - Bootstrap + jQuery responsive dashboard; endorsements and manual GPS.
 //   0.0.23 - Fix blank dashboard: auto-resolve hub DB path and resilient boot.
+//   0.0.24 - Sync overview tables when WebSocket counts arrive before table loaders.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "0.0.23"
+const Version = "0.0.24"

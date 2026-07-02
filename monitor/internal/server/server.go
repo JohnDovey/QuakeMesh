@@ -263,6 +263,9 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "nodes query failed", http.StatusInternalServerError)
 		return
 	}
+	if nodes == nil {
+		nodes = []datastore.Node{}
+	}
 	writeJSON(w, nodes)
 }
 
@@ -275,6 +278,9 @@ func (s *Server) handleHubs(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "hubs query failed", http.StatusInternalServerError)
 		return
+	}
+	if hubs == nil {
+		hubs = []datastore.Hub{}
 	}
 	writeJSON(w, hubs)
 }
