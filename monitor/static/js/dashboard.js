@@ -14,11 +14,39 @@ let graphNetwork = null;
 let hopChart = null;
 let fallbackEnabled = false;
 
+if (typeof $ === 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.createElement('div');
+    el.className = 'alert alert-danger m-3';
+    el.setAttribute('role', 'alert');
+    el.textContent = 'Monitor UI assets failed to load. Rebuild QuakeMeshMonitor (go run . in monitor/) and hard-refresh the browser (Ctrl+Shift+R).';
+    document.body.prepend(el);
+  });
+}
+
+function showBootError(err) {
+  const msg = err?.message || String(err);
+  let bar = document.getElementById('dashboard-errors');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'dashboard-errors';
+    bar.className = 'alert alert-danger m-3';
+    bar.setAttribute('role', 'alert');
+    document.querySelector('main')?.prepend(bar);
+  }
+  if (!bar.textContent.includes(msg)) {
+    const line = document.createElement('div');
+    line.textContent = msg;
+    bar.appendChild(line);
+  }
+}
+
 function showView(name) {
-  $('main > section').addClass('hidden');
-  $('#view-' + name).removeClass('hidden');
-  $('a[data-view]').removeClass('active');
-  $('a[data-view="' + name + '"]').addClass('active');
+  for (const el of document.querySelectorAll('main > section')) el.classList.add('hidden');
+  document.getElementById('view-' + name)?.classList.remove('hidden');
+  for (const a of document.querySelectorAll('a[data-view]')) {
+    a.classList.toggle('active', a.dataset.view === name);
+  }
   collapseMobileNav();
   if (name === 'map') {
     ensureMap();
@@ -31,11 +59,13 @@ function showView(name) {
   if (name === 'hop-timing') loadHopLatency();
 }
 
-$(function () {
-  $('a[data-view]').on('click', function (e) {
-    e.preventDefault();
-    showView($(this).data('view'));
-  });
+document.addEventListener('DOMContentLoaded', () => {
+  for (const a of document.querySelectorAll('a[data-view]')) {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      showView(a.dataset.view);
+    });
+  }
 });
 
 function applyOverview(o) {
@@ -750,16 +780,18 @@ async function saveInternetFallback(enabled) {
   if (cfg) setFallbackUI(!!cfg.enabled);
 }
 
-$(function () {
-  $('#fallback-toggle').on('change', async function () {
-    const el = this;
-    try {
-      await saveInternetFallback(el.checked);
-    } catch (_) {
-      el.checked = fallbackEnabled;
-    }
+if (typeof $ !== 'undefined') {
+  $(function () {
+    $('#fallback-toggle').on('change', async function () {
+      const el = this;
+      try {
+        await saveInternetFallback(el.checked);
+      } catch (_) {
+        el.checked = fallbackEnabled;
+      }
+    });
   });
-});
+}
 
 async function loadAppStats() {
   const stats = await api('/api/app-stats') || [];
@@ -843,23 +875,25 @@ async function setBanVerdict(id, agree) {
   await loadBanList();
 }
 
-$(function () {
-  $('#propose-ban').on('submit', async function (e) {
-    e.preventDefault();
-    await api('/api/ban-list', {
-      method: 'POST',
-      body: JSON.stringify({
-        app_id: $('#ban-app-id').val().trim(),
-        version_range: $('#ban-version').val().trim() || '*',
-        reason: $('#ban-reason').val().trim(),
-      }),
+if (typeof $ !== 'undefined') {
+  $(function () {
+    $('#propose-ban').on('submit', async function (e) {
+      e.preventDefault();
+      await api('/api/ban-list', {
+        method: 'POST',
+        body: JSON.stringify({
+          app_id: $('#ban-app-id').val().trim(),
+          version_range: $('#ban-version').val().trim() || '*',
+          reason: $('#ban-reason').val().trim(),
+        }),
+      });
+      $('#ban-app-id').val('');
+      $('#ban-version').val('');
+      $('#ban-reason').val('');
+      await loadBanList();
     });
-    $('#ban-app-id').val('');
-    $('#ban-version').val('');
-    $('#ban-reason').val('');
-    await loadBanList();
   });
-});
+}
 
 async function loadOverview() {
   const o = await api('/api/overview');
@@ -869,6 +903,7 @@ async function loadOverview() {
 async function loadRelayHubs() {
   const hubs = await api('/api/relay-hubs') || [];
   const tbody = document.getElementById('relay-table');
+  if (!tbody) return;
   tbody.innerHTML = '';
   for (const h of hubs) {
     const tr = document.createElement('tr');
@@ -898,21 +933,23 @@ async function deleteRelay(id) {
   await loadRelayHubs();
 }
 
-$(function () {
-  $('#add-relay').on('submit', async function (e) {
-    e.preventDefault();
-    const ip = $('#relay-ip').val().trim();
-    const port = parseInt($('#relay-port').val(), 10);
-    const hub = await api('/api/relay-hubs', {
-      method: 'POST',
-      body: JSON.stringify({ ip, port }),
+if (typeof $ !== 'undefined') {
+  $(function () {
+    $('#add-relay').on('submit', async function (e) {
+      e.preventDefault();
+      const ip = $('#relay-ip').val().trim();
+      const port = parseInt($('#relay-port').val(), 10);
+      const hub = await api('/api/relay-hubs', {
+        method: 'POST',
+        body: JSON.stringify({ ip, port }),
+      });
+      if (hub) await probeRelay(hub.hub_id);
+      $('#relay-ip').val('');
+      $('#relay-port').val('');
+      await loadRelayHubs();
     });
-    if (hub) await probeRelay(hub.hub_id);
-    $('#relay-ip').val('');
-    $('#relay-port').val('');
-    await loadRelayHubs();
   });
-});
+}
 
 connectWS((ev) => {
   if (ev.type === 'overview_snapshot' || ev.type === 'overview') {
@@ -954,21 +991,31 @@ connectWS((ev) => {
   }
 });
 
-$(async function init() {
-  try {
-    await loadOverview();
-    await loadHubs();
-    await loadNodes();
-    await loadTrustScores();
-    await loadOrphanHints();
-    await loadRoutes();
-    await loadInfrastructure();
-    await loadRelayHubs();
-    await loadInternetFallback();
-    await loadAppStats();
-    await loadSosAlerts();
-    await loadBanList();
-  } catch (_) {
-    window.location.href = '/login';
+async function bootDashboard() {
+  const jobs = [
+    loadOverview,
+    loadHubs,
+    loadNodes,
+    loadTrustScores,
+    loadOrphanHints,
+    loadRoutes,
+    loadInfrastructure,
+    loadRelayHubs,
+    loadInternetFallback,
+    loadAppStats,
+    loadSosAlerts,
+    loadBanList,
+  ];
+  for (const job of jobs) {
+    try {
+      await job();
+    } catch (err) {
+      console.error('dashboard:', err);
+      showBootError(err);
+    }
   }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  bootDashboard();
 });

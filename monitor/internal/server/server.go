@@ -148,16 +148,22 @@ func (s *Server) handleStatic() http.Handler {
 	fileServer := http.FileServer(http.FS(sub))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFileFS(w, r, sub, "index.html")
 			return
 		}
 		if r.URL.Path == "/login" {
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFileFS(w, r, sub, "login.html")
 			return
 		}
 		if r.URL.Path == "/change-password" {
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFileFS(w, r, sub, "change-password.html")
 			return
+		}
+		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Cache-Control", "no-cache")
 		}
 		fileServer.ServeHTTP(w, r)
 	})

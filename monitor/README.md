@@ -15,7 +15,9 @@ runs alongside a QuakeMeshHub. See "QuakeMeshMonitor" in [/plan.md](../plan.md).
 - **Routes** table and **Network Graph** (vis.js) — Phase 5
 - **Infrastructure** view: Wi-Fi LAN segments (`GET /api/infrastructure`), purple hexagons on Network Graph and Node Map
 - Subscribes to QuakeMeshHub's loopback management API (`127.0.0.1:8083/ws`)
-- Reads/writes `quakemeshhub.db` (shared with the Hub)
+- Reads/writes `quakemeshhub.db` (shared with the Hub). When you run from
+  `monitor/` without `-hub-db`, the Monitor auto-picks `../quakemeshhub.db`
+  if that registry is newer than a local `monitor/quakemeshhub.db`.
 
 ## Run
 

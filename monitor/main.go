@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/JohnDovey/QuakeMesh/monitor/internal/hubdb"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/monitorapp"
 )
 
@@ -38,11 +39,16 @@ func main() {
 		*bindAddr = "0.0.0.0:" + port
 	}
 
+	dbPath, dbHint := hubdb.Resolve(*hubDB)
+	if dbHint != "" {
+		log.Print(dbHint)
+	}
+
 	fmt.Printf("quakemeshmonitor %s\n", Version)
 
 	mon, err := monitorapp.New(monitorapp.Config{
 		BindAddr:  *bindAddr,
-		HubDBPath: *hubDB,
+		HubDBPath: dbPath,
 		HubWSURL:  *hubWS,
 	}, staticAssets)
 	if err != nil {
@@ -53,7 +59,7 @@ func main() {
 		log.Fatalf("quakemeshmonitor: %v", err)
 	}
 	fmt.Printf("dashboard listening on http://%s\n", mon.Addr())
-	fmt.Printf("reading hub registry from %s\n", *hubDB)
+	fmt.Printf("reading hub registry from %s\n", dbPath)
 	fmt.Printf("subscribing to hub events at %s\n", *hubWS)
 
 	stop := make(chan os.Signal, 1)

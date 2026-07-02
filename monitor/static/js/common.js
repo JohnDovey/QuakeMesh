@@ -55,12 +55,18 @@ function formatDateTime(value) {
 function collapseMobileNav() {
   const el = document.getElementById('mainNav');
   if (!el || !el.classList.contains('show')) return;
+  if (typeof bootstrap === 'undefined') {
+    el.classList.remove('show');
+    return;
+  }
   const inst = bootstrap.Collapse.getInstance(el) || new bootstrap.Collapse(el, { toggle: false });
   inst.hide();
 }
 
-$(function () {
-  $('#logout').on('click', async function (e) {
+document.addEventListener('DOMContentLoaded', () => {
+  const logout = document.getElementById('logout');
+  if (!logout) return;
+  logout.addEventListener('click', async (e) => {
     e.preventDefault();
     await api('/api/logout', { method: 'POST' });
     window.location.href = '/login';
