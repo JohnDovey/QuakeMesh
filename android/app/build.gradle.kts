@@ -11,8 +11,12 @@ android {
         applicationId = "net.quakemesh.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.16"
+        versionCode = 2
+        versionName = "0.0.18"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -27,6 +31,8 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation(project(":meshsdk"))
 
     val meshAar = file("libs/meshcore.aar")

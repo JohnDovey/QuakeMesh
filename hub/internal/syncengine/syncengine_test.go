@@ -9,7 +9,7 @@ import "testing"
 
 func TestPeerSyncAddrs_incrementsPort(t *testing.T) {
 	got := PeerSyncAddrs([]string{"127.0.0.1:47222", "10.0.0.2:9000"})
-	want := []string{"127.0.0.1:47223", "10.0.0.2:9001"}
+	want := []string{"127.0.0.1:47225", "10.0.0.2:9003"}
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, want %d", len(got), len(want))
 	}
@@ -25,7 +25,7 @@ func TestSyncBindAddr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "0.0.0.0:47223" {
-		t.Fatalf("SyncBindAddr = %q, want 0.0.0.0:47223", got)
+	if got != "0.0.0.0:47225" {
+		t.Fatalf("SyncBindAddr = %q, want 0.0.0.0:47225", got)
 	}
 }

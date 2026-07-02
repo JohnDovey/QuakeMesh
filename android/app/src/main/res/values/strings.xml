@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">QuakeMesh</string>
+    <string name="version_label">Ver: %1$s</string>
+    <string name="swipe_peers_hint">Swipe from the left edge for nearby hubs and nodes.</string>
     <string name="start_mesh">Start mesh</string>
     <string name="stop_mesh">Stop mesh</string>
     <string name="mesh_stopped">Mesh stopped</string>
     <string name="node_id_label">Node ID: %1$s</string>
-    <string name="node_id_unknown">Node ID: (start mesh)</string>
-    <string name="phase4_hint">Optional: bind the Go mesh core on your dev machine (see android/README.md). Without it the app uses a lightweight stub node — fine for SDK demos on the emulator.</string>
+    <string name="node_id_unknown">(start mesh)</string>
     <string name="hub_heartbeat_hint">Hub URL override (optional — auto-discovered on Wi‑Fi)</string>
     <string name="sdk_demo_button">SDK demo (Phase 12)</string>
     <string name="sdk_demo_mesh_required">Start the mesh before running the SDK demo.</string>
@@ -17,4 +18,13 @@
     <string name="sos_sending">Sending SOS test…</string>
     <string name="sos_sent_ok">SOS test published.</string>
     <string name="sos_test_message">Test SOS — QuakeMesh demo beacon</string>
+    <string name="nearby_peers_title">Nearby peers</string>
+    <string name="nearby_peers_hint">Hubs and nodes heard on this Wi‑Fi (LAN beacons).</string>
+    <string name="nearby_peers_empty">No peers yet — start the mesh on the same network.</string>
+    <string name="peer_kind_hub">Hub · %1$s</string>
+    <string name="peer_kind_node">Node · %1$s</string>
+    <string name="peer_hub_detail">%1$s\n%2$s</string>
+    <string name="peer_node_detail">%1$s%2$s</string>
+    <string name="peer_node_location">\n%.5f, %.5f</string>
+    <string name="peer_last_seen">Last heard %1$s</string>
 </resources>

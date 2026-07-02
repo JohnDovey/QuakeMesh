@@ -24,13 +24,17 @@ class MeshPresenceReporter(
     private var running = false
     private var worker: Thread? = null
 
-    fun start() {
+    fun start(sendImmediately: Boolean = false) {
         if (hubBaseUrl.isBlank() || running) return
         running = true
         worker = thread(name = "MeshPresence") {
-            while (running) {
+            if (sendImmediately) {
                 sendHeartbeat()
+            }
+            while (running) {
                 Thread.sleep(INTERVAL_MS)
+                if (!running) break
+                sendHeartbeat()
             }
         }
     }
@@ -60,7 +64,9 @@ class MeshPresenceReporter(
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             val code = conn.responseCode
             conn.disconnect()
-            if (code !in 200..299) {
+            if (code in 200..299) {
+                Log.i(TAG, "heartbeat ok to $base")
+            } else {
                 Log.w(TAG, "heartbeat HTTP $code to $base")
             }
         } catch (e: Exception) {

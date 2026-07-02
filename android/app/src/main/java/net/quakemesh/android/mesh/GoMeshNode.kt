@@ -43,8 +43,8 @@ class GoMeshNode private constructor(
 
         operator fun invoke(identityPath: String, dbPath: String): GoMeshNode {
             val nodeClass = Class.forName("mobile.Node")
-            val newNode = nodeClass.getDeclaredMethod("newNode", String::class.java, String::class.java)
-            val node = newNode.invoke(null, identityPath, dbPath)
+            val ctor = nodeClass.getDeclaredConstructor(String::class.java, String::class.java)
+            val node = ctor.newInstance(identityPath, dbPath)
             val sinkClass = Class.forName("mobile.FrameSink")
             val proxy = java.lang.reflect.Proxy.newProxyInstance(
                 sinkClass.classLoader,

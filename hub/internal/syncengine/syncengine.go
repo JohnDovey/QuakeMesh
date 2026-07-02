@@ -337,27 +337,27 @@ func (e *Engine) apply(msg *wire.HubSyncMessage) {
 	}
 }
 
-// PeerSyncAddrs maps OGM peer addresses to sync port (OGM port + 1).
+// PeerSyncAddrs maps OGM peer addresses to the gossip sync port (OGM port + 3).
 func PeerSyncAddrs(ogmPeers []string) []string {
 	out := make([]string, 0, len(ogmPeers))
 	for _, peer := range ogmPeers {
-		if addr, err := incrementUDPPort(peer); err == nil {
-			out = append(out, addr)
+		addr, err := net.ResolveUDPAddr("udp", peer)
+		if err != nil {
+			continue
 		}
+		addr.Port += 3
+		out = append(out, addr.String())
 	}
 	return out
 }
 
-// SyncBindAddr returns bind address one UDP port above ogmBind.
+// SyncBindAddr returns the UDP bind address for hub-to-hub gossip (OGM port + 3).
+// Port OGM+1 (47223) is reserved for LAN multicast discovery beacons.
 func SyncBindAddr(ogmBind string) (string, error) {
-	return incrementUDPPort(ogmBind)
-}
-
-func incrementUDPPort(hostPort string) (string, error) {
-	addr, err := net.ResolveUDPAddr("udp", hostPort)
+	addr, err := net.ResolveUDPAddr("udp", ogmBind)
 	if err != nil {
 		return "", err
 	}
-	addr.Port++
+	addr.Port += 3
 	return addr.String(), nil
 }

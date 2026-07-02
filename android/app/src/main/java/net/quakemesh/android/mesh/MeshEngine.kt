@@ -37,6 +37,7 @@ object MeshEngine {
         if (node != null) return
         val n = MeshNodeFactory.open(context)
         node = n
+        MeshDiscovery.setLocalNodeId(n.nodeId)
         locationReporter = LocationReporter(context.applicationContext).also { it.start() }
         MeshLocalApi.start(n.nodeId)
         if (n is StubMeshNode) {
@@ -78,6 +79,8 @@ object MeshEngine {
         node?.close()
         node = null
         discoveredHubUrl = ""
+        MeshDiscovery.setLocalNodeId(null)
+        MeshDiscovery.clear()
         statusListener?.invoke("Mesh stopped")
     }
 
@@ -111,6 +114,6 @@ object MeshEngine {
         presenceReporter?.stop()
         presenceReporter = MeshPresenceReporter(n.nodeId, hubHeartbeatUrl) {
             locationReporter?.latestFix()
-        }.also { it.start() }
+        }.also { it.start(sendImmediately = true) }
     }
 }

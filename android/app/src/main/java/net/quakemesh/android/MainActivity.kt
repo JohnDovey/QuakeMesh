@@ -2,9 +2,7 @@
 //
 // Changelog:
 //   0.0.5 - Phase 4: mesh start/stop UI wired to foreground service.
-//   0.0.10 - Phase 8: show GPS fix when mesh is running.
-//   0.0.14 - Phase 12: SDK reference demo button.
-//   0.0.15 - Phase 13: SOS beacon test button.
+//   0.0.18 - version label, nearby peers drawer, hub override at bottom.
 
 package net.quakemesh.android
 
@@ -12,25 +10,37 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import net.quakemesh.android.demo.ReferenceSdkDemo
 import net.quakemesh.android.demo.SosBeaconDemo
+import net.quakemesh.android.mesh.MeshDiscovery
 import net.quakemesh.android.mesh.MeshEngine
+import net.quakemesh.android.ui.PeersAdapter
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var drawerLayout: DrawerLayout
     private lateinit var statusView: TextView
     private lateinit var nodeIdView: TextView
+    private lateinit var versionView: TextView
     private lateinit var toggleButton: Button
     private lateinit var sdkDemoButton: Button
     private lateinit var sosButton: Button
     private lateinit var hubUrlField: EditText
+    private lateinit var peersList: RecyclerView
+    private lateinit var peersEmpty: TextView
+    private val peersAdapter = PeersAdapter()
 
     private var meshRunning = false
     private val prefs by lazy { getSharedPreferences("quakemesh_ui", MODE_PRIVATE) }
@@ -45,19 +55,32 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        drawerLayout = findViewById(R.id.drawer_layout)
         statusView = findViewById(R.id.status_text)
         nodeIdView = findViewById(R.id.node_id_text)
+        versionView = findViewById(R.id.version_text)
         toggleButton = findViewById(R.id.toggle_mesh_button)
         sdkDemoButton = findViewById(R.id.sdk_demo_button)
         sosButton = findViewById(R.id.sos_demo_button)
         hubUrlField = findViewById(R.id.hub_heartbeat_url)
+        peersList = findViewById(R.id.peers_list)
+        peersEmpty = findViewById(R.id.peers_empty)
+
+        versionView.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
         hubUrlField.setText(prefs.getString(PREF_HUB_URL, ""))
+
+        peersList.layoutManager = LinearLayoutManager(this)
+        peersList.adapter = peersAdapter
 
         MeshEngine.statusListener = { msg ->
             runOnUiThread {
                 val loc = MeshEngine.locationSummary()
                 statusView.text = if (loc != null) "$msg\nGPS: $loc" else msg
             }
+        }
+
+        MeshDiscovery.listener = {
+            runOnUiThread { refreshPeersList() }
         }
 
         toggleButton.setOnClickListener {
@@ -125,6 +148,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         refreshUi()
+        refreshPeersList()
+    }
+
+    override fun onBackPressed() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START)
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun refreshPeersList() {
+        val peers = MeshDiscovery.peers()
+        peersAdapter.submit(peers)
+        peersEmpty.visibility = if (peers.isEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun requestPermissionsIfNeeded() {

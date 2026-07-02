@@ -55,4 +55,21 @@ object LanBeacon {
         if (heartbeatPort <= 0 || ogmPort <= 0) return null
         return HubBeacon(nodeId, heartbeatPort, ogmPort)
     }
+
+    data class NodeBeacon(
+        val nodeId: String,
+        val lat: Double?,
+        val lon: Double?,
+    )
+
+    fun decodeNode(payload: ByteArray): NodeBeacon? {
+        if (!isBeacon(payload)) return null
+        val json = JSONObject(String(payload, PREFIX.size, payload.size - PREFIX.size, Charsets.UTF_8))
+        if (json.optString("kind") != KIND_NODE) return null
+        val nodeId = json.optString("node_id")
+        if (nodeId.isBlank()) return null
+        val lat = if (json.has("lat")) json.optDouble("lat") else null
+        val lon = if (json.has("lon")) json.optDouble("lon") else null
+        return NodeBeacon(nodeId, lat, lon)
+    }
 }

@@ -21,10 +21,10 @@ object MeshNodeFactory {
         val files = context.filesDir
         val identity = File(files, "quakemesh.identity").absolutePath
         val db = File(files, "quakemesh.db").absolutePath
-        return if (GoMeshNode.isAvailable) {
-            GoMeshNode(identity, db)
-        } else {
-            StubMeshNode.open(context, identity, db)
+        if (GoMeshNode.isAvailable) {
+            runCatching { return GoMeshNode(identity, db) }
+                .onFailure { android.util.Log.w("MeshNodeFactory", "Go core failed, using stub: ${it.message}") }
         }
+        return StubMeshNode.open(context, identity, db)
     }
 }

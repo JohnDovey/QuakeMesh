@@ -84,7 +84,13 @@ class LanUdpTransport(
                 if (payload.isEmpty()) continue
                 if (LanBeacon.isBeacon(payload)) {
                     LanBeacon.decodeHub(payload)?.let { hub ->
-                        onHubDiscovered("http://$peer:${hub.heartbeatPort}")
+                        val url = "http://$peer:${hub.heartbeatPort}"
+                        net.quakemesh.android.mesh.MeshDiscovery.recordHub(peer, hub.nodeId, url)
+                        onHubDiscovered(url)
+                    } ?: LanBeacon.decodeNode(payload)?.let { node ->
+                        net.quakemesh.android.mesh.MeshDiscovery.recordNode(
+                            peer, node.nodeId, node.lat, node.lon,
+                        )
                     }
                 } else {
                     onFrame(peer, payload)
