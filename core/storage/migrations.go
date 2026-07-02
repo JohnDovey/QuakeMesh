@@ -11,6 +11,7 @@
 //           status so QuakeMeshMonitor can track backbone hubs like nodes.
 //   0.0.19 - migration4: lan_segments and lan_segment_members for
 //           Wi-Fi infrastructure view in Monitor.
+//   0.0.22 - migration5: manual GPS pins for hubs and LAN segments.
 
 package storage
 
@@ -22,6 +23,7 @@ var Migrations = []Migration{
 	{Version: 2, SQL: migration2},
 	{Version: 3, SQL: migration3},
 	{Version: 4, SQL: migration4},
+	{Version: 5, SQL: migration5},
 }
 
 // migration1 creates every table listed in "Storage - SQLite Everywhere"
@@ -198,4 +200,12 @@ CREATE TABLE lan_segment_members (
 	PRIMARY KEY (segment_id, entity_type, entity_id)
 );
 CREATE INDEX idx_lan_segment_members_entity ON lan_segment_members (entity_type, entity_id);
+`
+
+// migration5 adds operator-placed map coordinates for hubs and LAN segments.
+const migration5 = `
+ALTER TABLE hub_registry ADD COLUMN manual_lat REAL;
+ALTER TABLE hub_registry ADD COLUMN manual_lon REAL;
+ALTER TABLE lan_segments ADD COLUMN manual_lat REAL;
+ALTER TABLE lan_segments ADD COLUMN manual_lon REAL;
 `

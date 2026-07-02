@@ -75,13 +75,19 @@ type RelayHub struct {
 
 // Hub is a dashboard view of hub_registry.
 type Hub struct {
-	HubID        string    `json:"hub_id"`
-	LastIP       string    `json:"last_ip,omitempty"`
-	LastPort     int       `json:"last_port,omitempty"`
-	RelayCapable bool      `json:"relay_capable"`
-	Status       string    `json:"status"`
-	FirstSeen    time.Time `json:"first_seen"`
-	LastSeen     time.Time `json:"last_seen"`
+	HubID              string    `json:"hub_id"`
+	LastIP             string    `json:"last_ip,omitempty"`
+	LastPort           int       `json:"last_port,omitempty"`
+	RelayCapable       bool      `json:"relay_capable"`
+	Status             string    `json:"status"`
+	FirstSeen          time.Time `json:"first_seen"`
+	LastSeen           time.Time `json:"last_seen"`
+	ManualLat          *float64  `json:"manual_lat,omitempty"`
+	ManualLon          *float64  `json:"manual_lon,omitempty"`
+	Lat                *float64  `json:"lat,omitempty"`
+	Lon                *float64  `json:"lon,omitempty"`
+	LocalHubEndorsed   bool      `json:"local_hub_endorsed"`
+	EndorsementCount   int       `json:"endorsement_count"`
 }
 
 // Overview holds aggregate counts for the dashboard.
@@ -114,6 +120,7 @@ type TrustScore struct {
 	Total             int    `json:"total"`
 	ProximityEvents   int    `json:"proximity_events"`
 	EndorsementCount  int    `json:"endorsement_count"`
+	LocalHubEndorsed  bool   `json:"local_hub_endorsed"`
 }
 
 // OrphanHint is a bearing/distance estimate for a stale mesh node.
@@ -152,6 +159,10 @@ type InfrastructureSegment struct {
 	LastSeen     time.Time `json:"last_seen"`
 	EstimatedLat *float64  `json:"estimated_lat,omitempty"`
 	EstimatedLon *float64  `json:"estimated_lon,omitempty"`
+	ManualLat    *float64  `json:"manual_lat,omitempty"`
+	ManualLon    *float64  `json:"manual_lon,omitempty"`
+	MapLat       *float64  `json:"map_lat,omitempty"`
+	MapLon       *float64  `json:"map_lon,omitempty"`
 	NodeIDs      []string  `json:"node_ids"`
 	HubIDs       []string  `json:"hub_ids"`
 	MemberCount  int       `json:"member_count"`
@@ -202,7 +213,8 @@ func (s *Store) Nodes() ([]Node, error) {
 // Hubs returns every backbone hub in hub_registry.
 func (s *Store) Hubs() ([]Hub, error) {
 	rows, err := s.db.Query(`
-		SELECT hub_id, last_ip, last_port, relay_capable, first_seen, last_seen, status
+		SELECT hub_id, last_ip, last_port, relay_capable, first_seen, last_seen, status,
+		       manual_lat, manual_lon
 		FROM hub_registry ORDER BY last_seen DESC`)
 	if err != nil {
 		return nil, err
@@ -210,6 +222,8 @@ func (s *Store) Hubs() ([]Hub, error) {
 	defer rows.Close()
 
 	var hubs []Hub
+	trustStore := trust.NewStore(s.db)
+	localHub, _ := s.LocalHubID()
 	for rows.Next() {
 		var idBytes []byte
 		var ip sql.NullString
@@ -217,7 +231,8 @@ func (s *Store) Hubs() ([]Hub, error) {
 		var relay int
 		var firstMs, lastMs int64
 		var status string
-		if err := rows.Scan(&idBytes, &ip, &port, &relay, &firstMs, &lastMs, &status); err != nil {
+		var manualLat, manualLon sql.NullFloat64
+		if err := rows.Scan(&idBytes, &ip, &port, &relay, &firstMs, &lastMs, &status, &manualLat, &manualLon); err != nil {
 			return nil, err
 		}
 		var id identity.NodeID
@@ -234,6 +249,29 @@ func (s *Store) Hubs() ([]Hub, error) {
 		}
 		if port.Valid {
 			h.LastPort = int(port.Int64)
+		}
+		if manualLat.Valid {
+			v := manualLat.Float64
+			h.ManualLat = &v
+			h.Lat = &v
+		}
+		if manualLon.Valid {
+			v := manualLon.Float64
+			h.ManualLon = &v
+			h.Lon = &v
+		}
+		if h.Lat == nil {
+			if nrLat, nrLon, ok := s.nodeRegistryCoords(id); ok {
+				h.Lat, h.Lon = &nrLat, &nrLon
+			}
+		}
+		if count, err := trustStore.EndorsementCount(id); err == nil {
+			h.EndorsementCount = count
+		}
+		if localHub != (identity.NodeID{}) {
+			if endorsed, err := trustStore.HasEndorsement(localHub, id); err == nil {
+				h.LocalHubEndorsed = endorsed
+			}
 		}
 		hubs = append(hubs, h)
 	}
@@ -322,6 +360,7 @@ func (s *Store) TrustScores() ([]TrustScore, error) {
 	}
 	trustStore := trust.NewStore(s.db)
 	now := time.Now()
+	localHub, _ := s.LocalHubID()
 	scores := make([]TrustScore, 0, len(nodes))
 	for _, n := range nodes {
 		idBytes, err := hex.DecodeString(n.NodeID)
@@ -342,6 +381,10 @@ func (s *Store) TrustScores() ([]TrustScore, error) {
 		if err != nil {
 			return nil, err
 		}
+		localEndorsed := false
+		if localHub != (identity.NodeID{}) {
+			localEndorsed, _ = trustStore.HasEndorsement(localHub, id)
+		}
 		scores = append(scores, TrustScore{
 			NodeID:           n.NodeID,
 			Status:           n.Status,
@@ -351,6 +394,7 @@ func (s *Store) TrustScores() ([]TrustScore, error) {
 			Total:            int(b.Total),
 			ProximityEvents:  proxEvents,
 			EndorsementCount: endorsers,
+			LocalHubEndorsed: localEndorsed,
 		})
 	}
 	return scores, nil
@@ -697,10 +741,89 @@ func (s *Store) Infrastructure() ([]InfrastructureSegment, error) {
 			v := *row.EstimatedLon
 			seg.EstimatedLon = &v
 		}
+		if row.ManualLat != nil {
+			v := *row.ManualLat
+			seg.ManualLat = &v
+		}
+		if row.ManualLon != nil {
+			v := *row.ManualLon
+			seg.ManualLon = &v
+		}
+		if row.MapLat != nil {
+			v := *row.MapLat
+			seg.MapLat = &v
+		}
+		if row.MapLon != nil {
+			v := *row.MapLon
+			seg.MapLon = &v
+		}
 		seg.MemberCount = len(row.NodeIDs) + len(row.HubIDs)
 		out = append(out, seg)
 	}
 	return out, nil
+}
+
+func (s *Store) nodeRegistryCoords(nodeID identity.NodeID) (lat, lon float64, ok bool) {
+	var latN, lonN sql.NullFloat64
+	err := s.db.QueryRow(
+		`SELECT last_lat, last_lon FROM node_registry WHERE node_id = ?`,
+		nodeID[:],
+	).Scan(&latN, &lonN)
+	if err != nil || !latN.Valid || !lonN.Valid {
+		return 0, 0, false
+	}
+	return latN.Float64, lonN.Float64, true
+}
+
+// EndorseEntity records an endorsement from this hub for a node or hub id.
+func (s *Store) EndorseEntity(endorsedHex string) error {
+	localHub, err := s.LocalHubID()
+	if err != nil {
+		return err
+	}
+	idBytes, err := hex.DecodeString(endorsedHex)
+	if err != nil || len(idBytes) != len(identity.NodeID{}) {
+		return fmt.Errorf("invalid node id")
+	}
+	var endorsed identity.NodeID
+	copy(endorsed[:], idBytes)
+	return trust.NewStore(s.db).EndorseWithHubContact(localHub, endorsed, time.Now())
+}
+
+// SetHubManualLocation stores operator map coordinates for a backbone hub.
+func (s *Store) SetHubManualLocation(hubHex string, lat, lon float64) error {
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return fmt.Errorf("invalid coordinates")
+	}
+	idBytes, err := hex.DecodeString(hubHex)
+	if err != nil || len(idBytes) != len(identity.NodeID{}) {
+		return fmt.Errorf("invalid hub id")
+	}
+	var hubID identity.NodeID
+	copy(hubID[:], idBytes)
+	res, err := s.db.Exec(
+		`UPDATE hub_registry SET manual_lat = ?, manual_lon = ? WHERE hub_id = ?`,
+		lat, lon, hubID[:],
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// SetInfrastructureManualLocation stores operator map coordinates for a LAN segment.
+func (s *Store) SetInfrastructureManualLocation(segmentID string, lat, lon float64) error {
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		return fmt.Errorf("invalid coordinates")
+	}
+	return lansegments.NewStore(s.db).SetManualPosition(segmentID, lat, lon)
 }
 
 // ProposeBan creates a new ban proposal from the local hub.

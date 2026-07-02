@@ -32,6 +32,10 @@ type Segment struct {
 	LastSeen     time.Time
 	EstimatedLat *float64
 	EstimatedLon *float64
+	ManualLat    *float64
+	ManualLon    *float64
+	MapLat       *float64
+	MapLon       *float64
 	NodeIDs      []string
 	HubIDs       []string
 }
@@ -95,7 +99,8 @@ func (s *Store) RecordMembership(entityType string, entityID identity.NodeID, ct
 // List returns every segment with member node/hub ids and estimated position.
 func (s *Store) List() ([]Segment, error) {
 	rows, err := s.db.Query(`
-		SELECT segment_id, gateway_ip, ssid, bssid, first_seen, last_seen, estimated_lat, estimated_lon
+		SELECT segment_id, gateway_ip, ssid, bssid, first_seen, last_seen,
+		       estimated_lat, estimated_lon, manual_lat, manual_lon
 		FROM lan_segments ORDER BY last_seen DESC`)
 	if err != nil {
 		return nil, err
@@ -107,8 +112,8 @@ func (s *Store) List() ([]Segment, error) {
 		var seg Segment
 		var ssid, bssid sql.NullString
 		var firstMs, lastMs int64
-		var lat, lon sql.NullFloat64
-		if err := rows.Scan(&seg.SegmentID, &seg.GatewayIP, &ssid, &bssid, &firstMs, &lastMs, &lat, &lon); err != nil {
+		var lat, lon, manualLat, manualLon sql.NullFloat64
+		if err := rows.Scan(&seg.SegmentID, &seg.GatewayIP, &ssid, &bssid, &firstMs, &lastMs, &lat, &lon, &manualLat, &manualLon); err != nil {
 			return nil, err
 		}
 		if ssid.Valid {
@@ -127,6 +132,15 @@ func (s *Store) List() ([]Segment, error) {
 			v := lon.Float64
 			seg.EstimatedLon = &v
 		}
+		if manualLat.Valid {
+			v := manualLat.Float64
+			seg.ManualLat = &v
+		}
+		if manualLon.Valid {
+			v := manualLon.Float64
+			seg.ManualLon = &v
+		}
+		seg.MapLat, seg.MapLon = segmentMapPosition(seg.ManualLat, seg.ManualLon, seg.EstimatedLat, seg.EstimatedLon)
 		segments = append(segments, seg)
 	}
 	if err := rows.Err(); err != nil {
@@ -141,6 +155,32 @@ func (s *Store) List() ([]Segment, error) {
 		segments[i].HubIDs = hubs
 	}
 	return segments, nil
+}
+
+// SetManualPosition stores operator-placed map coordinates for a segment.
+func (s *Store) SetManualPosition(segmentID string, lat, lon float64) error {
+	res, err := s.db.Exec(
+		`UPDATE lan_segments SET manual_lat = ?, manual_lon = ? WHERE segment_id = ?`,
+		lat, lon, segmentID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func segmentMapPosition(manualLat, manualLon, estLat, estLon *float64) (*float64, *float64) {
+	if manualLat != nil && manualLon != nil {
+		return manualLat, manualLon
+	}
+	return estLat, estLon
 }
 
 func (s *Store) membersForSegment(segmentID string) ([]string, []string, error) {

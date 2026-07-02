@@ -14,8 +14,10 @@
 package hubapp
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -112,6 +114,8 @@ type Hub struct {
 	Daemon   *daemonapi.Server
 	Heartbeat *nodeheartbeat.Server
 	Discovery *landiscovery.Engine
+
+	cancel context.CancelFunc
 }
 
 // New loads or creates this hub's identity, opens (and migrates) its
@@ -199,6 +203,8 @@ func New(cfg Config) (*Hub, error) {
 			Notifier:    events,
 			SOSNotifier: api,
 			Segments:    segmentStore,
+			Trust:       trustStore,
+			LocalHub:    id.NodeID,
 		})
 	}
 
@@ -213,6 +219,7 @@ func New(cfg Config) (*Hub, error) {
 			OGMPort:       ogmPort,
 			Registry:      reg,
 			Notifier:      events,
+			HubNotifier:   events,
 			Segments:      segmentStore,
 		})
 	}
@@ -227,6 +234,8 @@ func New(cfg Config) (*Hub, error) {
 // Start begins the management API's HTTP server, the DTN engine, and the
 // OGM engine.
 func (h *Hub) Start() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancel = cancel
 	if err := h.API.Start(); err != nil {
 		return fmt.Errorf("hubapp: start management API: %w", err)
 	}
@@ -281,6 +290,7 @@ func (h *Hub) Start() error {
 	if err := h.registerSelfHub(); err != nil {
 		return fmt.Errorf("hubapp: register self hub: %w", err)
 	}
+	go h.selfHubLivenessLoop(ctx)
 	if err := signPendingProposals(h.Identity, banlist.NewStore(h.DB)); err != nil {
 		return fmt.Errorf("hubapp: sign ban proposals: %w", err)
 	}
@@ -301,6 +311,27 @@ func (h *Hub) registerSelfHub() error {
 	}
 	_ = configstore.New(h.DB).Set(configstore.KeyLocalHubID, h.Identity.NodeID.String())
 	return nil
+}
+
+// selfHubLivenessLoop keeps this hub's hub_registry row fresh so Monitor
+// does not mark it stale after the OGM stale-after window.
+func (h *Hub) selfHubLivenessLoop(ctx context.Context) {
+	interval := h.cfg.OGMInterval
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := h.registerSelfHub(); err != nil {
+				log.Printf("hubapp: self hub liveness: %v", err)
+			}
+		}
+	}
 }
 
 func portFromAddr(addr string) (int, error) {
@@ -335,6 +366,9 @@ func signPendingProposals(id *identity.Identity, bans *banlist.Store) error {
 // Close stops the OGM engine, DTN engine, and management API and closes
 // the registry database.
 func (h *Hub) Close() error {
+	if h.cancel != nil {
+		h.cancel()
+	}
 	h.Fallback.Close()
 	h.DTN.Close()
 	var daemonErr error

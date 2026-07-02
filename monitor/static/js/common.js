@@ -52,8 +52,17 @@ function formatDateTime(value) {
   return dateTimeFmt.format(d);
 }
 
-document.getElementById('logout')?.addEventListener('click', async (e) => {
-  e.preventDefault();
-  await api('/api/logout', { method: 'POST' });
-  window.location.href = '/login';
+function collapseMobileNav() {
+  const el = document.getElementById('mainNav');
+  if (!el || !el.classList.contains('show')) return;
+  const inst = bootstrap.Collapse.getInstance(el) || new bootstrap.Collapse(el, { toggle: false });
+  inst.hide();
+}
+
+$(function () {
+  $('#logout').on('click', async function (e) {
+    e.preventDefault();
+    await api('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  });
 });

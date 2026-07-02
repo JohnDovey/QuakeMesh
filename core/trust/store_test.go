@@ -65,3 +65,16 @@ func TestScoreForNode(t *testing.T) {
 		t.Fatalf("expected positive score, got %+v", b)
 	}
 }
+
+func TestEndorseWithHubContact(t *testing.T) {
+	s := testStore(t)
+	endorser, endorsed := testID(5), testID(6)
+	now := time.Now()
+	if err := s.EndorseWithHubContact(endorser, endorsed, now); err != nil {
+		t.Fatal(err)
+	}
+	ok, err := s.HasEndorsement(endorser, endorsed)
+	if err != nil || !ok {
+		t.Fatalf("HasEndorsement = %v, %v", ok, err)
+	}
+}

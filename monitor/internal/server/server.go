@@ -8,6 +8,7 @@
 //   0.0.11 - /api/metrics/hop-latency and /api/internet-fallback.
 //   0.0.12 - /api/app-stats for Phase 10 App Stats view.
 //   0.0.19 - /api/infrastructure for Wi-Fi LAN segments.
+//   0.0.22 - endorsements and manual GPS for hubs/infrastructure.
 
 package server
 
@@ -82,6 +83,9 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/internet-fallback", s.requireAuth(s.handleInternetFallback))
 	mux.HandleFunc("/api/app-stats", s.requireAuth(s.handleAppStats))
 	mux.HandleFunc("/api/infrastructure", s.requireAuth(s.handleInfrastructure))
+	mux.HandleFunc("/api/infrastructure/", s.requireAuth(s.handleInfrastructureAction))
+	mux.HandleFunc("/api/endorse/", s.requireAuth(s.handleEndorse))
+	mux.HandleFunc("/api/hubs/", s.requireAuth(s.handleHubAction))
 	mux.HandleFunc("/api/ban-list", s.requireAuth(s.handleBanList))
 	mux.HandleFunc("/api/ban-list/", s.requireAuth(s.handleBanListAction))
 	mux.HandleFunc("/api/sos-alerts", s.requireAuth(s.handleSosAlerts))
@@ -410,6 +414,97 @@ func (s *Server) handleInfrastructure(w http.ResponseWriter, r *http.Request) {
 		segments = []datastore.InfrastructureSegment{}
 	}
 	writeJSON(w, segments)
+}
+
+func (s *Server) handleEndorse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/endorse/"), "/")
+	if id == "" {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.cfg.Data.EndorseEntity(id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleHubAction(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/hubs/")
+	parts := strings.Split(strings.Trim(rest, "/"), "/")
+	if len(parts) != 2 || parts[0] == "" {
+		http.NotFound(w, r)
+		return
+	}
+	hubID := parts[0]
+	action := parts[1]
+	switch action {
+	case "endorse":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := s.cfg.Data.EndorseEntity(hubID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	case "location":
+		if r.Method != http.MethodPatch && r.Method != http.MethodPut {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Lat float64 `json:"lat"`
+			Lon float64 `json:"lon"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if err := s.cfg.Data.SetHubManualLocation(hubID, body.Lat, body.Lon); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (s *Server) handleInfrastructureAction(w http.ResponseWriter, r *http.Request) {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/infrastructure/")
+	parts := strings.Split(strings.Trim(rest, "/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.NotFound(w, r)
+		return
+	}
+	segmentID := parts[0]
+	if len(parts) == 2 && parts[1] != "location" {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method != http.MethodPatch && r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Lat float64 `json:"lat"`
+		Lon float64 `json:"lon"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if err := s.cfg.Data.SetInfrastructureManualLocation(segmentID, body.Lat, body.Lon); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleSosAlerts(w http.ResponseWriter, r *http.Request) {

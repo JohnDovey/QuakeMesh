@@ -41,7 +41,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var hubUrlField: EditText
     private lateinit var peersList: RecyclerView
     private lateinit var peersEmpty: TextView
-    private val peersAdapter = PeersAdapter()
+    private val peersAdapter = PeersAdapter(
+        localNodeId = { MeshEngine.nodeId() },
+        hubUrl = { MeshEngine.hubHeartbeatUrl },
+        onStatus = { msg -> runOnUiThread { statusView.text = msg } },
+    )
 
     private var meshRunning = false
     private val prefs by lazy { getSharedPreferences("quakemesh_ui", MODE_PRIVATE) }

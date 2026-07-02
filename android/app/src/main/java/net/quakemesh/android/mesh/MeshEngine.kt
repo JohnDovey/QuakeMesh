@@ -18,6 +18,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 object MeshEngine {
     private val transports = CopyOnWriteArrayList<Transport>()
     private var node: MeshNode? = null
+    private var appContext: Context? = null
     private var locationReporter: LocationReporter? = null
     private var presenceReporter: MeshPresenceReporter? = null
     private val statusListeners = CopyOnWriteArrayList<(String) -> Unit>()
@@ -51,6 +52,7 @@ object MeshEngine {
 
     fun start(context: Context) {
         if (node != null) return
+        appContext = context.applicationContext
         val n = MeshNodeFactory.open(context)
         node = n
         MeshDiscovery.setLocalNodeId(n.nodeId)
@@ -96,6 +98,7 @@ object MeshEngine {
         transports.clear()
         node?.close()
         node = null
+        appContext = null
         discoveredHubUrl = ""
         MeshDiscovery.setLocalNodeId(null)
         MeshDiscovery.clear()
@@ -129,9 +132,10 @@ object MeshEngine {
 
     private fun startPresenceReporter() {
         val n = node ?: return
+        val ctx = appContext ?: return
         if (hubHeartbeatUrl.isBlank()) return
         presenceReporter?.stop()
-        presenceReporter = MeshPresenceReporter(context.applicationContext, n.nodeId, hubHeartbeatUrl) {
+        presenceReporter = MeshPresenceReporter(ctx, n.nodeId, hubHeartbeatUrl) {
             locationReporter?.latestFix()
         }.also { it.start(sendImmediately = true) }
     }

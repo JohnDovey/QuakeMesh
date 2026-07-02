@@ -409,6 +409,15 @@ func (r *Registry) Hubs() ([]Hub, error) {
 	return hubs, rows.Err()
 }
 
+// SetHubManualLocation stores operator-placed map coordinates for a hub.
+func (r *Registry) SetHubManualLocation(hubID identity.NodeID, lat, lon float64) error {
+	_, err := r.db.Exec(
+		`UPDATE hub_registry SET manual_lat = ?, manual_lon = ? WHERE hub_id = ?`,
+		lat, lon, hubID[:],
+	)
+	return err
+}
+
 // RelayHubRow is a row from relay_hubs for gossip export.
 type RelayHubRow struct {
 	HubID        identity.NodeID

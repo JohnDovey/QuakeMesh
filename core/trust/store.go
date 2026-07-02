@@ -115,6 +115,31 @@ func (s *Store) AddEndorsement(endorser, endorsed identity.NodeID, signature []b
 	return nil
 }
 
+// HasEndorsement reports whether endorser already endorsed endorsed.
+func (s *Store) HasEndorsement(endorser, endorsed identity.NodeID) (bool, error) {
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM trust_endorsements WHERE endorser_node_id = ? AND endorsed_node_id = ?`,
+		endorser[:], endorsed[:],
+	).Scan(&n)
+	return n > 0, err
+}
+
+// EndorseWithHubContact records hub-direct proximity if needed, then stores
+// an endorsement. Used for LAN heartbeat contact and Monitor admin actions.
+func (s *Store) EndorseWithHubContact(endorser, endorsed identity.NodeID, at time.Time) error {
+	ok, err := s.HasProximity(endorser, endorsed)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		if err := s.RecordProximity(endorser, endorsed, -55, TransportHubDirect, at); err != nil {
+			return err
+		}
+	}
+	return s.AddEndorsement(endorser, endorsed, []byte("quakemesh-endorse"), at)
+}
+
 // ScoreForNode computes the trust breakdown for a node using registry first_seen.
 func (s *Store) ScoreForNode(nodeID identity.NodeID, firstSeen time.Time, now time.Time) (Breakdown, error) {
 	direct, relay, err := s.ProximityCounts(nodeID)

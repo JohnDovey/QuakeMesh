@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.17 - LAN HTTP heartbeat so mesh nodes (e.g. Android) appear in Monitor.
 //   0.0.19 - optional lan_context on heartbeat for infrastructure segments.
+//   0.0.22 - hub proximity on heartbeat; POST /v1/endorse for mesh nodes.
 
 // Package nodeheartbeat accepts periodic presence reports from mesh nodes
 // that are not yet speaking the hub OGM protocol (Phase 4 Android stub).
@@ -22,6 +23,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/lancontext"
 	"github.com/JohnDovey/QuakeMesh/core/lansegments"
+	"github.com/JohnDovey/QuakeMesh/core/trust"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
 
@@ -47,6 +49,8 @@ type Config struct {
 	Notifier    Notifier
 	SOSNotifier SOSNotifier
 	Segments    *lansegments.Store
+	Trust       *trust.Store
+	LocalHub    identity.NodeID
 }
 
 // Server accepts POST /v1/heartbeat from mesh nodes on the LAN.
@@ -62,6 +66,7 @@ func New(cfg Config) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/heartbeat", s.handleHeartbeat)
 	mux.HandleFunc("/v1/sos", s.handleSOS)
+	mux.HandleFunc("/v1/endorse", s.handleEndorse)
 	s.httpServer = &http.Server{Handler: mux}
 	return s
 }
@@ -139,6 +144,9 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = s.cfg.Segments.RecordMembership(lansegments.EntityNode, nodeID, ctx, now)
 	}
+	if s.cfg.Trust != nil && s.cfg.LocalHub != (identity.NodeID{}) {
+		_ = s.cfg.Trust.RecordProximity(s.cfg.LocalHub, nodeID, -55, trust.TransportHubDirect, now)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
@@ -187,4 +195,54 @@ func (s *Server) handleSOS(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (s *Server) handleEndorse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.cfg.Trust == nil {
+		http.Error(w, "endorsements disabled", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		EndorserNodeID string `json:"endorser_node_id"`
+		EndorsedNodeID string `json:"endorsed_node_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.EndorserNodeID == "" || body.EndorsedNodeID == "" {
+		http.Error(w, "endorser_node_id and endorsed_node_id required", http.StatusBadRequest)
+		return
+	}
+	endorser, err := parseNodeID(body.EndorserNodeID)
+	if err != nil {
+		http.Error(w, "invalid endorser_node_id", http.StatusBadRequest)
+		return
+	}
+	endorsed, err := parseNodeID(body.EndorsedNodeID)
+	if err != nil {
+		http.Error(w, "invalid endorsed_node_id", http.StatusBadRequest)
+		return
+	}
+	if endorser == endorsed {
+		http.Error(w, "cannot endorse self", http.StatusBadRequest)
+		return
+	}
+	now := time.Now()
+	if err := s.cfg.Trust.EndorseWithHubContact(endorser, endorsed, now); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func parseNodeID(hexID string) (identity.NodeID, error) {
+	idBytes, err := hex.DecodeString(hexID)
+	if err != nil || len(idBytes) != len(identity.NodeID{}) {
+		return identity.NodeID{}, fmt.Errorf("invalid node id")
+	}
+	var nodeID identity.NodeID
+	copy(nodeID[:], idBytes)
+	return nodeID, nil
 }

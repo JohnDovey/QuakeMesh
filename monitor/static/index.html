@@ -1,233 +1,302 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>QuakeMesh Monitor</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/vendor/vis/vis-network.min.css">
 </head>
-<body>
-  <header>
-    <h1>QuakeMesh Monitor</h1>
-    <nav>
-      <a href="#overview" class="active" data-view="overview">Overview</a>
-      <a href="#hubs" data-view="hubs">Hubs</a>
-      <a href="#routes" data-view="routes">Routes</a>
-      <a href="#graph" data-view="graph">Network Graph</a>
-      <a href="#map" data-view="map">Node Map</a>
-      <a href="#trust" data-view="trust">Trust Scores</a>
-      <a href="#hop-timing" data-view="hop-timing">Hop Timing</a>
-      <a href="#apps" data-view="apps">App Stats</a>
-      <a href="#sos" data-view="sos">SOS Alerts</a>
-      <a href="#bans" data-view="bans">Ban List</a>
-      <a href="#relay" data-view="relay">Relay Hubs</a>
-      <a href="#" id="logout">Logout</a>
-    </nav>
-  </header>
-  <main>
+<body class="qm-body">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary sticky-top">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-semibold" href="#overview" data-view="overview">QuakeMesh Monitor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+        aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNav">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0 flex-wrap">
+          <li class="nav-item"><a class="nav-link active" href="#overview" data-view="overview">Overview</a></li>
+          <li class="nav-item"><a class="nav-link" href="#hubs" data-view="hubs">Hubs</a></li>
+          <li class="nav-item"><a class="nav-link" href="#routes" data-view="routes">Routes</a></li>
+          <li class="nav-item"><a class="nav-link" href="#graph" data-view="graph">Network Graph</a></li>
+          <li class="nav-item"><a class="nav-link" href="#map" data-view="map">Node Map</a></li>
+          <li class="nav-item"><a class="nav-link" href="#trust" data-view="trust">Trust Scores</a></li>
+          <li class="nav-item"><a class="nav-link" href="#hop-timing" data-view="hop-timing">Hop Timing</a></li>
+          <li class="nav-item"><a class="nav-link" href="#apps" data-view="apps">App Stats</a></li>
+          <li class="nav-item"><a class="nav-link" href="#sos" data-view="sos">SOS Alerts</a></li>
+          <li class="nav-item"><a class="nav-link" href="#bans" data-view="bans">Ban List</a></li>
+          <li class="nav-item"><a class="nav-link" href="#relay" data-view="relay">Relay Hubs</a></li>
+        </ul>
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link" href="#" id="logout">Logout</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-fluid py-3 py-lg-4">
     <section id="view-overview">
-      <div class="panel">
-        <h2>Overview</h2>
-        <div class="grid">
-          <div class="stat"><div class="label">Total nodes</div><div class="value" id="stat-total">—</div></div>
-          <div class="stat"><div class="label">Nodes online</div><div class="value" id="stat-online">—</div></div>
-          <div class="stat"><div class="label">Nodes offline / stale</div><div class="value" id="stat-offline">—</div></div>
-          <div class="stat"><div class="label">Total hubs</div><div class="value" id="stat-hubs-total">—</div></div>
-          <div class="stat"><div class="label">Hubs online</div><div class="value" id="stat-hubs-online">—</div></div>
-          <div class="stat"><div class="label">Hubs offline / stale</div><div class="value" id="stat-hubs-offline">—</div></div>
-          <div class="stat"><div class="label">Active routes</div><div class="value" id="stat-routes">—</div></div>
-          <div class="stat"><div class="label">DTN queue depth</div><div class="value" id="stat-dtn">—</div></div>
-          <div class="stat"><div class="label">Internet fallback</div><div class="value" id="stat-fallback">—</div></div>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Overview</h2>
+          <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3">
+            <div class="col"><div class="stat"><div class="label">Total nodes</div><div class="value" id="stat-total">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Nodes online</div><div class="value" id="stat-online">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Nodes offline / stale</div><div class="value" id="stat-offline">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Total hubs</div><div class="value" id="stat-hubs-total">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Hubs online</div><div class="value" id="stat-hubs-online">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Hubs offline / stale</div><div class="value" id="stat-hubs-offline">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Active routes</div><div class="value" id="stat-routes">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">DTN queue depth</div><div class="value" id="stat-dtn">—</div></div></div>
+            <div class="col"><div class="stat"><div class="label">Internet fallback</div><div class="value" id="stat-fallback">—</div></div></div>
+          </div>
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="fallback-toggle">
+            <label class="form-check-label" for="fallback-toggle">Allow internet fallback when mesh is unavailable</label>
+          </div>
         </div>
-        <p class="form-row" style="margin-top:1rem">
-          <label class="toggle">
-            <input type="checkbox" id="fallback-toggle">
-            Allow internet fallback when mesh is unavailable
-          </label>
-        </p>
       </div>
-      <div class="panel">
-        <h3>Recent hubs</h3>
-        <table>
-          <thead><tr><th>Hub ID</th><th>Endpoint</th><th>Status</th><th>Last seen (local)</th></tr></thead>
-          <tbody id="hubs-table-overview"></tbody>
-        </table>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h3 class="h5">Recent hubs</h3>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead><tr><th>Hub ID</th><th>Endpoint</th><th>Status</th><th>Last seen (local)</th></tr></thead>
+              <tbody id="hubs-table-overview"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <div class="panel">
-        <h3>Recent nodes</h3>
-        <table>
-          <thead><tr><th>Node ID</th><th>Status</th><th>Last seen (local)</th></tr></thead>
-          <tbody id="nodes-table"></tbody>
-        </table>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h3 class="h5">Recent nodes</h3>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead><tr><th>Node ID</th><th>Status</th><th>Last seen (local)</th></tr></thead>
+              <tbody id="nodes-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-hubs" class="hidden">
-      <div class="panel">
-        <h2>Backbone Hubs</h2>
-        <p>QuakeMeshHub instances on the network. Updates live via WebSocket.</p>
-        <table>
-          <thead>
-            <tr><th>Hub ID</th><th>Endpoint</th><th>Relay</th><th>Status</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
-          </thead>
-          <tbody id="hubs-table"></tbody>
-        </table>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Backbone Hubs</h2>
+          <p class="text-secondary">QuakeMeshHub instances on the network. Updates live via WebSocket.</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr><th>Hub ID</th><th>Endpoint</th><th>Relay</th><th>Status</th><th>Lat</th><th>Lon</th><th>First seen (local)</th><th>Last seen (local)</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="hubs-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-routes" class="hidden">
-      <div class="panel">
-        <h2>Routes</h2>
-        <table>
-          <thead>
-            <tr><th>Destination</th><th>Next hop</th><th>Hops</th><th>TQ</th><th>Latency (ms)</th></tr>
-          </thead>
-          <tbody id="routes-table"></tbody>
-        </table>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Routes</h2>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr><th>Destination</th><th>Next hop</th><th>Hops</th><th>TQ</th><th>Latency (ms)</th></tr>
+              </thead>
+              <tbody id="routes-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-graph" class="hidden">
-      <div class="panel">
-        <h2>Network Graph</h2>
-        <p>
-          Blue diamonds are backbone hubs; coloured dots are mesh nodes (colour = trust).
-          Purple hexagons are Wi-Fi LAN segments (gateway/SSID). Solid arrows are active routes;
-          dashed lines connect members to their LAN segment.
-        </p>
-        <div class="graph-legend">
-          <span class="legend-item"><span class="legend-swatch legend-hub"></span> Hub</span>
-          <span class="legend-item"><span class="legend-swatch legend-node"></span> Node</span>
-          <span class="legend-item"><span class="legend-swatch legend-infra"></span> LAN segment</span>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Network Graph</h2>
+          <p class="text-secondary">
+            Blue diamonds are backbone hubs; coloured dots are mesh nodes (colour = trust).
+            Purple hexagons are Wi-Fi LAN segments (gateway/SSID). Solid arrows are active routes;
+            dashed lines connect members to their LAN segment.
+          </p>
+          <div class="graph-legend mb-2">
+            <span class="legend-item"><span class="legend-swatch legend-hub"></span> Hub</span>
+            <span class="legend-item"><span class="legend-swatch legend-node"></span> Node</span>
+            <span class="legend-item"><span class="legend-swatch legend-infra"></span> LAN segment</span>
+          </div>
+          <div id="network-graph" class="graph-panel"></div>
         </div>
-        <div id="network-graph" class="graph-panel"></div>
       </div>
     </section>
 
     <section id="view-map" class="hidden">
-      <div class="panel">
-        <h2>Node Map</h2>
-        <p>
-          Online nodes: coloured dots (trust score). Stale nodes: amber dashed pins with direction lines from the online-node centroid.
-          Purple hexagons mark Wi-Fi LAN gateways/segments (position estimated from member GPS).
-        </p>
-        <div id="map"></div>
-        <h3>Orphaned / stale nodes</h3>
-        <ul id="orphan-hints-list"></ul>
-        <h3>Backbone hubs</h3>
-        <ul id="map-hubs-list"></ul>
-        <h3>Nodes without GPS</h3>
-        <ul id="no-gps-list"></ul>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Node Map</h2>
+          <p class="text-secondary">
+            Online nodes: coloured dots (trust score). Stale nodes: amber dashed pins with direction lines from the online-node centroid.
+            Purple hexagons mark Wi-Fi LAN gateways/segments (position estimated from member GPS).
+          </p>
+          <div id="map" class="mb-3"></div>
+          <h3 class="h5">Wi-Fi LAN segments</h3>
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead><tr><th>SSID / Gateway</th><th>Map lat</th><th>Map lon</th><th>Actions</th></tr></thead>
+              <tbody id="infra-location-table"></tbody>
+            </table>
+          </div>
+          <h3 class="h5">Orphaned / stale nodes</h3>
+          <ul id="orphan-hints-list" class="list-unstyled"></ul>
+          <h3 class="h5">Backbone hubs</h3>
+          <ul id="map-hubs-list" class="list-unstyled"></ul>
+          <h3 class="h5">Nodes without GPS</h3>
+          <ul id="no-gps-list" class="list-unstyled"></ul>
+        </div>
       </div>
     </section>
 
     <section id="view-trust" class="hidden">
-      <div class="panel">
-        <h2>Trust Scores</h2>
-        <p>0–100 score from longevity, hub-observed proximity, and endorsements (diminishing per endorser).</p>
-        <table>
-          <thead>
-            <tr>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Trust Scores</h2>
+          <p class="text-secondary">0–100 score from longevity, hub-observed proximity, and endorsements (diminishing per endorser).</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr>
               <th>Node ID</th><th>Status</th><th>Total</th><th>Longevity</th>
-              <th>Proximity</th><th>Endorsements</th><th>Proximity events</th><th>Endorsers</th>
-            </tr>
-          </thead>
-          <tbody id="trust-table"></tbody>
-        </table>
+              <th>Proximity</th><th>Endorsements</th><th>Proximity events</th><th>Endorsers</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="trust-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-hop-timing" class="hidden">
-      <div class="panel">
-        <h2>Hop Timing</h2>
-        <p>Route latency samples recorded when the hub updates routing_table entries (last hour).</p>
-        <canvas id="hop-latency-chart" height="120"></canvas>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Hop Timing</h2>
+          <p class="text-secondary">Route latency samples recorded when the hub updates routing_table entries (last hour).</p>
+          <div class="hop-chart-wrap">
+            <canvas id="hop-latency-chart"></canvas>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-apps" class="hidden">
-      <div class="panel">
-        <h2>App Stats</h2>
-        <p>Third-party apps active across the network (<code>app_id@version</code>).</p>
-        <table>
-          <thead>
-            <tr><th>App ID</th><th>Version</th><th>Nodes</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
-          </thead>
-          <tbody id="app-stats-table"></tbody>
-        </table>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">App Stats</h2>
+          <p class="text-secondary">Third-party apps active across the network (<code>app_id@version</code>).</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr><th>App ID</th><th>Version</th><th>Nodes</th><th>First seen (local)</th><th>Last seen (local)</th></tr>
+              </thead>
+              <tbody id="app-stats-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-sos" class="hidden">
-      <div class="panel">
-        <h2>SOS Alerts</h2>
-        <p>Live feed from <code>net.quakemesh.sosbeacon</code> publishes on topic <code>sos</code> via the hub mesh-sdk daemon. Try: <code>go run ./apps/sosbeacon -text "test alert" -lat -36.85 -lon 174.76</code></p>
-        <table>
-          <thead>
-            <tr><th>Received (local)</th><th>Node</th><th>Message</th><th>Location</th></tr>
-          </thead>
-          <tbody id="sos-table"></tbody>
-        </table>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">SOS Alerts</h2>
+          <p class="text-secondary">Live feed from <code>net.quakemesh.sosbeacon</code> publishes on topic <code>sos</code> via the hub mesh-sdk daemon. Try: <code>go run ./apps/sosbeacon -text "test alert" -lat -36.85 -lon 174.76</code></p>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr><th>Received (local)</th><th>Node</th><th>Message</th><th>Location</th></tr>
+              </thead>
+              <tbody id="sos-table"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
     <section id="view-bans" class="hidden">
-      <div class="panel">
-        <h2>Ban List</h2>
-        <p>Proposals are gossiped across hubs. Agreeing enforces locally — banned apps cannot register or appear in discovery on this hub.</p>
-        <form id="propose-ban" class="form-row">
-          <div>
-            <label for="ban-app-id">App ID</label>
-            <input id="ban-app-id" placeholder="net.example.badapp" required>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Ban List</h2>
+          <p class="text-secondary">Proposals are gossiped across hubs. Agreeing enforces locally — banned apps cannot register or appear in discovery on this hub.</p>
+          <form id="propose-ban" class="row g-2 align-items-end mb-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label" for="ban-app-id">App ID</label>
+              <input class="form-control form-control-sm" id="ban-app-id" placeholder="net.example.badapp" required>
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label" for="ban-version">Version range</label>
+              <input class="form-control form-control-sm" id="ban-version" placeholder="* or 1.*">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label" for="ban-reason">Reason</label>
+              <input class="form-control form-control-sm" id="ban-reason" placeholder="malware / policy" required>
+            </div>
+            <div class="col-12 col-md-2">
+              <button type="submit" class="btn btn-success btn-sm w-100">Propose ban</button>
+            </div>
+          </form>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr>
+                  <th>App ID</th><th>Versions</th><th>Reason</th><th>Agree</th><th>Disagree</th>
+                  <th>Local</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ban-table"></tbody>
+            </table>
           </div>
-          <div>
-            <label for="ban-version">Version range</label>
-            <input id="ban-version" placeholder="* or 1.*">
-          </div>
-          <div>
-            <label for="ban-reason">Reason</label>
-            <input id="ban-reason" placeholder="malware / policy" required>
-          </div>
-          <button type="submit">Propose ban</button>
-        </form>
-        <table>
-          <thead>
-            <tr>
-              <th>App ID</th><th>Versions</th><th>Reason</th><th>Agree</th><th>Disagree</th>
-              <th>Local</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="ban-table"></tbody>
-        </table>
+        </div>
       </div>
     </section>
 
     <section id="view-relay" class="hidden">
-      <div class="panel">
-        <h2>Relay Hub List</h2>
-        <form id="add-relay" class="form-row">
-          <div>
-            <label for="relay-ip">IP</label>
-            <input id="relay-ip" placeholder="203.0.113.10" required>
+      <div class="card qm-panel mb-3">
+        <div class="card-body">
+          <h2 class="h4 card-title">Relay Hub List</h2>
+          <form id="add-relay" class="row g-2 align-items-end mb-3">
+            <div class="col-12 col-sm-5 col-md-4">
+              <label class="form-label" for="relay-ip">IP</label>
+              <input class="form-control form-control-sm" id="relay-ip" placeholder="203.0.113.10" required>
+            </div>
+            <div class="col-6 col-sm-4 col-md-3">
+              <label class="form-label" for="relay-port">Port</label>
+              <input class="form-control form-control-sm" id="relay-port" type="number" min="1" max="65535" placeholder="47222" required>
+            </div>
+            <div class="col-6 col-sm-3 col-md-2">
+              <button type="submit" class="btn btn-success btn-sm w-100">Add &amp; probe</button>
+            </div>
+          </form>
+          <div class="table-responsive">
+            <table class="table table-sm table-dark table-hover qm-table mb-0">
+              <thead>
+                <tr><th>Hub ID</th><th>IP</th><th>Port</th><th>Source</th><th>Last verified (local)</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="relay-table"></tbody>
+            </table>
           </div>
-          <div>
-            <label for="relay-port">Port</label>
-            <input id="relay-port" type="number" min="1" max="65535" placeholder="47222" required>
-          </div>
-          <button type="submit">Add &amp; probe</button>
-        </form>
-        <table>
-          <thead>
-            <tr><th>Hub ID</th><th>IP</th><th>Port</th><th>Source</th><th>Last verified (local)</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="relay-table"></tbody>
-        </table>
+        </div>
       </div>
     </section>
   </main>
 
+  <script src="/vendor/jquery/jquery.min.js"></script>
+  <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script src="/vendor/leaflet/leaflet.js"></script>
   <script src="/vendor/vis/vis-network.min.js"></script>
   <script src="/vendor/chart/chart.umd.min.js"></script>

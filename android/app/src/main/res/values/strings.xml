@@ -35,4 +35,8 @@
     <string name="peer_node_detail">%1$s%2$s</string>
     <string name="peer_node_location">\n%.5f, %.5f</string>
     <string name="peer_last_seen">Last heard %1$s</string>
+    <string name="peer_actions_title">Peer %1$s</string>
+    <string name="peer_endorse">Endorse node</string>
+    <string name="peer_endorse_confirm">Record a trust endorsement for this node with QuakeMeshHub?</string>
+    <string name="peer_endorse_mesh_required">Start the mesh and connect to a hub before endorsing.</string>
 </resources>

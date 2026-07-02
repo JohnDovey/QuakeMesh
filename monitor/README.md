@@ -6,7 +6,7 @@ runs alongside a QuakeMeshHub. See "QuakeMeshMonitor" in [/plan.md](../plan.md).
 ## Phase 3 scope (implemented)
 
 - HTTP server on `0.0.0.0:8082` (override with `-bind` or `QUAKEMESH_MONITOR_PORT`)
-- Embedded static assets (`go:embed`) including Leaflet.js — works offline except map tiles
+- Embedded static assets (`go:embed`) including Bootstrap, jQuery, and Leaflet.js — works offline except map tiles
 - Session-based admin login (`Admin` / `test1234` on first run, forced password change)
 - Login rate limiting (5 failures → 60 s lockout)
 - Overview dashboard with live counts via browser `/ws`

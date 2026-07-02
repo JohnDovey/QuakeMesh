@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.18 - LAN multicast hub/node discovery on connected Wi-Fi.
 //   0.0.19 - lan_context on beacons and segment membership recording.
+//   0.0.22 - refresh local hub_registry liveness on each hub beacon.
 
 // Package landiscovery broadcasts hub presence and ingests node beacons on
 // the LAN multicast group defined in core/lanbeacon.
@@ -36,7 +37,13 @@ type Config struct {
 	Interval      time.Duration
 	Registry      *registry.Registry
 	Notifier      nodeheartbeat.Notifier
+	HubNotifier   HubNotifier
 	Segments      *lansegments.Store
+}
+
+// HubNotifier receives backbone hub status transitions for Monitor.
+type HubNotifier interface {
+	HubStatusChanged(hubID identity.NodeID, status registry.HubStatus)
 }
 
 // Engine sends hub beacons and registers nodes from LAN announcements.
@@ -116,13 +123,15 @@ func (e *Engine) sendLoop(ctx context.Context) {
 }
 
 func (e *Engine) sendHubBeacon() {
+	now := time.Now()
 	var lan *lancontext.Context
 	if ctx := lancontext.Detect(); ctx.Valid() {
 		lan = &ctx
 		if e.cfg.Segments != nil {
-			_ = e.cfg.Segments.RecordMembership(lansegments.EntityHub, e.cfg.HubNodeID, ctx, time.Now())
+			_ = e.cfg.Segments.RecordMembership(lansegments.EntityHub, e.cfg.HubNodeID, ctx, now)
 		}
 	}
+	e.refreshHubLiveness(lan, now)
 	payload, err := lanbeacon.HubBeacon(
 		e.cfg.HubNodeID.String(),
 		e.cfg.HeartbeatPort,
@@ -137,6 +146,32 @@ func (e *Engine) sendHubBeacon() {
 	dst := &net.UDPAddr{IP: group, Port: lanbeacon.MulticastPort}
 	if _, err := e.conn.WriteToUDP(payload, dst); err != nil {
 		log.Printf("landiscovery: send hub beacon: %v", err)
+	}
+}
+
+func (e *Engine) refreshHubLiveness(lan *lancontext.Context, at time.Time) {
+	if e.cfg.Registry == nil || e.cfg.OGMPort <= 0 {
+		return
+	}
+	ip := ""
+	if lan != nil && lan.LocalIP != "" {
+		ip = lan.LocalIP
+	}
+	if ip == "" && e.conn != nil {
+		if la, ok := e.conn.LocalAddr().(*net.UDPAddr); ok && la.IP != nil {
+			ip = la.IP.String()
+		}
+	}
+	if ip == "" {
+		ip = "0.0.0.0"
+	}
+	changed, err := e.cfg.Registry.UpsertHubSeen(e.cfg.HubNodeID, ip, e.cfg.OGMPort, at)
+	if err != nil {
+		log.Printf("landiscovery: hub liveness: %v", err)
+		return
+	}
+	if changed && e.cfg.HubNotifier != nil {
+		e.cfg.HubNotifier.HubStatusChanged(e.cfg.HubNodeID, registry.HubStatusOnline)
 	}
 }
 

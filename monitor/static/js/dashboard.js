@@ -9,25 +9,32 @@ let orphanLayers = [];
 let routes = [];
 let infrastructure = [];
 let infraMapMarkers = {};
+let hubMapMarkers = {};
 let graphNetwork = null;
 let hopChart = null;
 let fallbackEnabled = false;
 
 function showView(name) {
-  for (const el of document.querySelectorAll('main > section')) el.classList.add('hidden');
-  document.getElementById('view-' + name)?.classList.remove('hidden');
-  for (const a of document.querySelectorAll('nav a[data-view]')) {
-    a.classList.toggle('active', a.dataset.view === name);
+  $('main > section').addClass('hidden');
+  $('#view-' + name).removeClass('hidden');
+  $('a[data-view]').removeClass('active');
+  $('a[data-view="' + name + '"]').addClass('active');
+  collapseMobileNav();
+  if (name === 'map') {
+    ensureMap();
+    setTimeout(() => map?.invalidateSize(), 50);
   }
-  if (name === 'map') ensureMap();
-  if (name === 'graph') ensureGraph();
+  if (name === 'graph') {
+    ensureGraph();
+    setTimeout(() => graphNetwork?.fit(), 50);
+  }
   if (name === 'hop-timing') loadHopLatency();
 }
 
-document.querySelectorAll('nav a[data-view]').forEach((a) => {
-  a.addEventListener('click', (e) => {
+$(function () {
+  $('a[data-view]').on('click', function (e) {
     e.preventDefault();
-    showView(a.dataset.view);
+    showView($(this).data('view'));
   });
 });
 
@@ -81,12 +88,21 @@ function renderHubsTable(tbodyId, detailed) {
     const tr = document.createElement('tr');
     const cls = h.status === 'online' ? 'status-online' : 'status-stale';
     if (detailed) {
+      const lat = h.lat != null ? h.lat.toFixed(5) : '—';
+      const lon = h.lon != null ? h.lon.toFixed(5) : '—';
+      const endorseBtn = h.local_hub_endorsed
+        ? '<span class="status-online">endorsed</span>'
+        : `<button type="button" class="btn btn-secondary btn-sm hub-endorse" data-id="${h.hub_id}">Endorse</button>`;
       tr.innerHTML = `<td class="kind-hub" title="${h.hub_id}">${shortId(h.hub_id)}</td>
         <td>${hubEndpoint(h)}</td>
         <td>${h.relay_capable ? 'yes' : 'no'}</td>
         <td class="${cls}">${h.status}</td>
+        <td>${lat}</td>
+        <td>${lon}</td>
         <td>${formatDateTime(h.first_seen)}</td>
-        <td>${formatDateTime(h.last_seen)}</td>`;
+        <td>${formatDateTime(h.last_seen)}</td>
+        <td>${endorseBtn}
+          <button type="button" class="btn btn-outline-light btn-sm hub-gps" data-id="${h.hub_id}" data-lat="${h.lat ?? ''}" data-lon="${h.lon ?? ''}">Set GPS</button></td>`;
     } else {
       tr.innerHTML = `<td class="kind-hub" title="${h.hub_id}">${shortId(h.hub_id)}</td>
         <td>${hubEndpoint(h)}</td>
@@ -94,6 +110,14 @@ function renderHubsTable(tbodyId, detailed) {
         <td>${formatDateTime(h.last_seen)}</td>`;
     }
     tbody.appendChild(tr);
+  }
+  if (detailed) {
+    tbody.querySelectorAll('.hub-endorse').forEach((btn) => {
+      btn.addEventListener('click', () => endorseEntity(btn.dataset.id));
+    });
+    tbody.querySelectorAll('.hub-gps').forEach((btn) => {
+      btn.addEventListener('click', () => promptHubLocation(btn.dataset.id, btn.dataset.lat, btn.dataset.lon));
+    });
   }
 }
 
@@ -129,11 +153,11 @@ function refreshMapMarkers() {
   if (!map) return;
   const noGps = document.getElementById('no-gps-list');
   noGps.innerHTML = '';
-  const withGps = [];
+  const activeNodeIds = new Set();
   for (const n of nodes) {
     const score = trustByNode[n.node_id]?.total ?? 0;
     if (n.lat != null && n.lon != null) {
-      withGps.push(n);
+      activeNodeIds.add(n.node_id);
       if (!markers[n.node_id]) {
         markers[n.node_id] = L.circleMarker([n.lat, n.lon], {
           radius: 9,
@@ -146,6 +170,9 @@ function refreshMapMarkers() {
       } else {
         markers[n.node_id].setLatLng([n.lat, n.lon]);
         markers[n.node_id].setStyle({ fillColor: trustColor(score) });
+        markers[n.node_id].setPopupContent(
+          `<strong>${shortId(n.node_id)}</strong><br>${n.status}<br>Trust: ${score}`,
+        );
       }
     } else {
       const li = document.createElement('li');
@@ -153,12 +180,39 @@ function refreshMapMarkers() {
       noGps.appendChild(li);
     }
   }
-  if (withGps.length) {
-    const bounds = L.latLngBounds(withGps.map((n) => [n.lat, n.lon]));
-    map.fitBounds(bounds.pad(0.2));
+  for (const id of Object.keys(markers)) {
+    if (!activeNodeIds.has(id)) {
+      map.removeLayer(markers[id]);
+      delete markers[id];
+    }
   }
   refreshOrphanMap();
   refreshInfrastructureMap();
+  refreshHubMapMarkers();
+  fitMapToVisibleMarkers();
+}
+
+function fitMapToVisibleMarkers() {
+  if (!map) return;
+  const points = [];
+  for (const n of nodes) {
+    if (n.lat != null && n.lon != null) points.push([n.lat, n.lon]);
+  }
+  for (const h of hubs) {
+    if (h.lat != null && h.lon != null) points.push([h.lat, h.lon]);
+  }
+  for (const seg of infrastructure) {
+    if (seg.map_lat != null && seg.map_lon != null) points.push([seg.map_lat, seg.map_lon]);
+  }
+  for (const h of orphanHints) {
+    if (h.last_lat != null && h.last_lon != null) points.push([h.last_lat, h.last_lon]);
+  }
+  if (!points.length) return;
+  if (points.length === 1) {
+    map.setView(points[0], 14);
+    return;
+  }
+  map.fitBounds(L.latLngBounds(points).pad(0.2));
 }
 
 function formatBearing(deg) {
@@ -240,6 +294,7 @@ async function loadOrphanHints() {
   renderOrphanList();
   refreshOrphanMap();
   refreshInfrastructureMap();
+  fitMapToVisibleMarkers();
 }
 
 async function loadNodes() {
@@ -256,6 +311,8 @@ async function loadHubs() {
   renderHubsTable('hubs-table', true);
   renderMapHubList();
   refreshGraph();
+  refreshHubMapMarkers();
+  fitMapToVisibleMarkers();
 }
 
 function renderMapHubList() {
@@ -297,9 +354,15 @@ function renderTrustTable() {
       <td>${s.proximity}</td>
       <td>${s.endorsements}</td>
       <td>${s.proximity_events}</td>
-      <td>${s.endorsement_count}</td>`;
+      <td>${s.endorsement_count}</td>
+      <td>${s.local_hub_endorsed
+        ? '<span class="status-online">endorsed</span>'
+        : `<button type="button" class="btn btn-secondary btn-sm node-endorse" data-id="${s.node_id}">Endorse</button>`}</td>`;
     tbody.appendChild(tr);
   }
+  tbody.querySelectorAll('.node-endorse').forEach((btn) => {
+    btn.addEventListener('click', () => endorseEntity(btn.dataset.id));
+  });
 }
 
 async function loadRoutes() {
@@ -355,7 +418,7 @@ function refreshInfrastructureMap() {
   if (!map) return;
   const active = new Set();
   for (const seg of infrastructure) {
-    if (seg.estimated_lat == null || seg.estimated_lon == null) continue;
+    if (seg.map_lat == null || seg.map_lon == null) continue;
     active.add(seg.segment_id);
     const members = (seg.member_count ?? 0) || ((seg.node_ids?.length ?? 0) + (seg.hub_ids?.length ?? 0));
     const popup = `<strong>${seg.ssid || 'LAN segment'}</strong><br>`
@@ -363,7 +426,7 @@ function refreshInfrastructureMap() {
       + `Members: ${members}<br>`
       + `Last seen: ${formatDateTime(seg.last_seen)}`;
     if (!infraMapMarkers[seg.segment_id]) {
-      infraMapMarkers[seg.segment_id] = L.circleMarker([seg.estimated_lat, seg.estimated_lon], {
+      infraMapMarkers[seg.segment_id] = L.circleMarker([seg.map_lat, seg.map_lon], {
         radius: 13,
         color: '#a371f7',
         fillColor: '#8957e5',
@@ -372,7 +435,7 @@ function refreshInfrastructureMap() {
         dashArray: '6 4',
       }).addTo(map).bindPopup(popup);
     } else {
-      infraMapMarkers[seg.segment_id].setLatLng([seg.estimated_lat, seg.estimated_lon]);
+      infraMapMarkers[seg.segment_id].setLatLng([seg.map_lat, seg.map_lon]);
       infraMapMarkers[seg.segment_id].setPopupContent(popup);
     }
   }
@@ -386,8 +449,95 @@ function refreshInfrastructureMap() {
 
 async function loadInfrastructure() {
   infrastructure = await api('/api/infrastructure') || [];
+  renderInfraLocationTable();
   refreshInfrastructureMap();
   refreshGraph();
+  fitMapToVisibleMarkers();
+}
+
+function renderInfraLocationTable() {
+  const tbody = document.getElementById('infra-location-table');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!infrastructure.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4">No LAN segments discovered yet.</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  for (const seg of infrastructure) {
+    const tr = document.createElement('tr');
+    const label = seg.ssid || seg.gateway_ip;
+    const lat = seg.map_lat != null ? seg.map_lat.toFixed(5) : '';
+    const lon = seg.map_lon != null ? seg.map_lon.toFixed(5) : '';
+    tr.innerHTML = `<td title="${seg.segment_id}">${label}</td>
+      <td><input class="form-control form-control-sm infra-lat" data-id="${seg.segment_id}" value="${lat}" placeholder="lat"></td>
+      <td><input class="form-control form-control-sm infra-lon" data-id="${seg.segment_id}" value="${lon}" placeholder="lon"></td>
+      <td><button type="button" class="btn btn-outline-light btn-sm infra-save" data-id="${seg.segment_id}">Save</button></td>`;
+    tbody.appendChild(tr);
+  }
+  tbody.querySelectorAll('.infra-save').forEach((btn) => {
+    btn.addEventListener('click', () => saveInfraLocation(btn.dataset.id));
+  });
+}
+
+async function saveInfraLocation(segmentID) {
+  const lat = parseFloat(document.querySelector(`.infra-lat[data-id="${segmentID}"]`)?.value);
+  const lon = parseFloat(document.querySelector(`.infra-lon[data-id="${segmentID}"]`)?.value);
+  if (Number.isNaN(lat) || Number.isNaN(lon)) return;
+  await api(`/api/infrastructure/${encodeURIComponent(segmentID)}/location`, {
+    method: 'PATCH',
+    body: JSON.stringify({ lat, lon }),
+  });
+  await loadInfrastructure();
+}
+
+function refreshHubMapMarkers() {
+  if (!map) return;
+  const active = new Set();
+  for (const h of hubs) {
+    if (h.lat == null || h.lon == null) continue;
+    active.add(h.hub_id);
+    const popup = `<strong>Hub ${shortId(h.hub_id)}</strong><br>${hubEndpoint(h)}<br>${h.status}`;
+    if (!hubMapMarkers[h.hub_id]) {
+      hubMapMarkers[h.hub_id] = L.circleMarker([h.lat, h.lon], {
+        radius: 10,
+        color: '#6cb6ff',
+        fillColor: '#1f6feb',
+        fillOpacity: 0.85,
+        weight: 2,
+      }).addTo(map).bindPopup(popup);
+    } else {
+      hubMapMarkers[h.hub_id].setLatLng([h.lat, h.lon]);
+      hubMapMarkers[h.hub_id].setPopupContent(popup);
+    }
+  }
+  for (const id of Object.keys(hubMapMarkers)) {
+    if (!active.has(id)) {
+      map.removeLayer(hubMapMarkers[id]);
+      delete hubMapMarkers[id];
+    }
+  }
+}
+
+async function endorseEntity(nodeID) {
+  await api(`/api/endorse/${nodeID}`, { method: 'POST' });
+  await loadTrustScores();
+  await loadHubs();
+}
+
+function promptHubLocation(hubID, lat, lon) {
+  const newLat = window.prompt('Hub latitude (-90 to 90):', lat || '');
+  if (newLat == null) return;
+  const newLon = window.prompt('Hub longitude (-180 to 180):', lon || '');
+  if (newLon == null) return;
+  const latN = parseFloat(newLat);
+  const lonN = parseFloat(newLon);
+  if (Number.isNaN(latN) || Number.isNaN(lonN)) return;
+  api(`/api/hubs/${hubID}/location`, {
+    method: 'PATCH',
+    body: JSON.stringify({ lat: latN, lon: lonN }),
+  }).then(() => loadHubs());
 }
 
 function hubGraphNode(h) {
@@ -600,12 +750,15 @@ async function saveInternetFallback(enabled) {
   if (cfg) setFallbackUI(!!cfg.enabled);
 }
 
-document.getElementById('fallback-toggle')?.addEventListener('change', async (e) => {
-  try {
-    await saveInternetFallback(e.target.checked);
-  } catch (_) {
-    e.target.checked = fallbackEnabled;
-  }
+$(function () {
+  $('#fallback-toggle').on('change', async function () {
+    const el = this;
+    try {
+      await saveInternetFallback(el.checked);
+    } catch (_) {
+      el.checked = fallbackEnabled;
+    }
+  });
 });
 
 async function loadAppStats() {
@@ -669,8 +822,8 @@ async function loadBanList() {
       <td>${b.agree_count}</td><td>${b.disagree_count}</td>
       <td class="${cls}">${local}</td>
       <td>
-        <button class="secondary ban-agree" data-id="${b.ban_id}">Agree</button>
-        <button class="danger ban-disagree" data-id="${b.ban_id}">Disagree</button>
+        <button type="button" class="btn btn-secondary btn-sm ban-agree" data-id="${b.ban_id}">Agree</button>
+        <button type="button" class="btn btn-danger btn-sm ban-disagree" data-id="${b.ban_id}">Disagree</button>
       </td>`;
     tbody.appendChild(tr);
   }
@@ -690,20 +843,22 @@ async function setBanVerdict(id, agree) {
   await loadBanList();
 }
 
-document.getElementById('propose-ban')?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  await api('/api/ban-list', {
-    method: 'POST',
-    body: JSON.stringify({
-      app_id: document.getElementById('ban-app-id').value.trim(),
-      version_range: document.getElementById('ban-version').value.trim() || '*',
-      reason: document.getElementById('ban-reason').value.trim(),
-    }),
+$(function () {
+  $('#propose-ban').on('submit', async function (e) {
+    e.preventDefault();
+    await api('/api/ban-list', {
+      method: 'POST',
+      body: JSON.stringify({
+        app_id: $('#ban-app-id').val().trim(),
+        version_range: $('#ban-version').val().trim() || '*',
+        reason: $('#ban-reason').val().trim(),
+      }),
+    });
+    $('#ban-app-id').val('');
+    $('#ban-version').val('');
+    $('#ban-reason').val('');
+    await loadBanList();
   });
-  document.getElementById('ban-app-id').value = '';
-  document.getElementById('ban-version').value = '';
-  document.getElementById('ban-reason').value = '';
-  await loadBanList();
 });
 
 async function loadOverview() {
@@ -720,8 +875,8 @@ async function loadRelayHubs() {
     tr.innerHTML = `<td title="${h.hub_id}">${shortId(h.hub_id)}</td><td>${h.ip}</td><td>${h.port}</td><td>${h.source}</td>
       <td>${formatDateTime(h.last_verified)}</td>
       <td>
-        <button class="secondary probe-btn" data-id="${h.hub_id}">Probe</button>
-        <button class="danger delete-btn" data-id="${h.hub_id}">Remove</button>
+        <button type="button" class="btn btn-secondary btn-sm probe-btn" data-id="${h.hub_id}">Probe</button>
+        <button type="button" class="btn btn-danger btn-sm delete-btn" data-id="${h.hub_id}">Remove</button>
       </td>`;
     tbody.appendChild(tr);
   }
@@ -743,18 +898,20 @@ async function deleteRelay(id) {
   await loadRelayHubs();
 }
 
-document.getElementById('add-relay').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const ip = document.getElementById('relay-ip').value.trim();
-  const port = parseInt(document.getElementById('relay-port').value, 10);
-  const hub = await api('/api/relay-hubs', {
-    method: 'POST',
-    body: JSON.stringify({ ip, port }),
+$(function () {
+  $('#add-relay').on('submit', async function (e) {
+    e.preventDefault();
+    const ip = $('#relay-ip').val().trim();
+    const port = parseInt($('#relay-port').val(), 10);
+    const hub = await api('/api/relay-hubs', {
+      method: 'POST',
+      body: JSON.stringify({ ip, port }),
+    });
+    if (hub) await probeRelay(hub.hub_id);
+    $('#relay-ip').val('');
+    $('#relay-port').val('');
+    await loadRelayHubs();
   });
-  if (hub) await probeRelay(hub.hub_id);
-  document.getElementById('relay-ip').value = '';
-  document.getElementById('relay-port').value = '';
-  await loadRelayHubs();
 });
 
 connectWS((ev) => {
@@ -797,7 +954,7 @@ connectWS((ev) => {
   }
 });
 
-(async function init() {
+$(async function init() {
   try {
     await loadOverview();
     await loadHubs();
@@ -814,4 +971,4 @@ connectWS((ev) => {
   } catch (_) {
     window.location.href = '/login';
   }
-})();
+});

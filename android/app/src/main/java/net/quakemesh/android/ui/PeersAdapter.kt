@@ -14,11 +14,16 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import net.quakemesh.android.R
+import net.quakemesh.android.mesh.EndorsePeer
 import net.quakemesh.android.mesh.MeshDiscovery
 import java.text.DateFormat
 import java.util.Date
 
-class PeersAdapter : RecyclerView.Adapter<PeersAdapter.Holder>() {
+class PeersAdapter(
+    private val localNodeId: () -> String?,
+    private val hubUrl: () -> String,
+    private val onStatus: (String) -> Unit,
+) : RecyclerView.Adapter<PeersAdapter.Holder>() {
     private var items: List<MeshDiscovery.Peer> = emptyList()
     private val timeFmt = DateFormat.getTimeInstance(DateFormat.SHORT)
 
@@ -33,7 +38,7 @@ class PeersAdapter : RecyclerView.Adapter<PeersAdapter.Holder>() {
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
-        holder.bind(items[position], timeFmt)
+        holder.bind(items[position], timeFmt, localNodeId, hubUrl, onStatus)
     }
 
     override fun getItemCount(): Int = items.size
@@ -43,7 +48,13 @@ class PeersAdapter : RecyclerView.Adapter<PeersAdapter.Holder>() {
         private val detailView: TextView = itemView.findViewById(R.id.peer_detail)
         private val seenView: TextView = itemView.findViewById(R.id.peer_seen)
 
-        fun bind(peer: MeshDiscovery.Peer, timeFmt: DateFormat) {
+        fun bind(
+            peer: MeshDiscovery.Peer,
+            timeFmt: DateFormat,
+            localNodeId: () -> String?,
+            hubUrl: () -> String,
+            onStatus: (String) -> Unit,
+        ) {
             kindView.text = when (peer.kind) {
                 MeshDiscovery.Kind.HUB -> itemView.context.getString(R.string.peer_kind_hub, peer.address)
                 MeshDiscovery.Kind.NODE -> itemView.context.getString(R.string.peer_kind_node, peer.address)
@@ -69,16 +80,43 @@ class PeersAdapter : RecyclerView.Adapter<PeersAdapter.Holder>() {
                 timeFmt.format(Date(peer.lastSeenMs)),
             )
 
+            itemView.setOnClickListener {
+                when (peer.kind) {
+                    MeshDiscovery.Kind.HUB -> {
+                        if (!peer.heartbeatUrl.isNullOrBlank()) {
+                            showHeartbeatInfo(peer.address, peer.heartbeatUrl!!)
+                        }
+                    }
+                    MeshDiscovery.Kind.NODE -> showNodeActions(peer, localNodeId, hubUrl, onStatus)
+                }
+            }
             detailView.isClickable = false
             detailView.setOnClickListener(null)
             detailView.setBackgroundResource(0)
-            if (peer.kind == MeshDiscovery.Kind.HUB && !peer.heartbeatUrl.isNullOrBlank()) {
-                detailView.isClickable = true
-                detailView.setBackgroundResource(android.R.drawable.list_selector_background)
-                detailView.setOnClickListener {
-                    showHeartbeatInfo(peer.address, peer.heartbeatUrl!!)
+        }
+
+        private fun showNodeActions(
+            peer: MeshDiscovery.Peer,
+            localNodeId: () -> String?,
+            hubUrl: () -> String,
+            onStatus: (String) -> Unit,
+        ) {
+            val context = itemView.context
+            val idShort = peer.nodeId.take(16) + if (peer.nodeId.length > 16) "…" else ""
+            AlertDialog.Builder(context)
+                .setTitle(context.getString(R.string.peer_actions_title, idShort))
+                .setMessage(context.getString(R.string.peer_endorse_confirm))
+                .setPositiveButton(R.string.peer_endorse) { _, _ ->
+                    val self = localNodeId()
+                    val hub = hubUrl()
+                    if (self.isNullOrBlank() || hub.isBlank()) {
+                        onStatus(context.getString(R.string.peer_endorse_mesh_required))
+                        return@setPositiveButton
+                    }
+                    EndorsePeer.send(self, peer.nodeId, hub, onStatus)
                 }
-            }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
 
         private fun showHeartbeatInfo(hubAddress: String, heartbeatUrl: String) {
