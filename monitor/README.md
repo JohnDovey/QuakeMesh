@@ -13,6 +13,7 @@ runs alongside a QuakeMeshHub. See "QuakeMeshMonitor" in [/plan.md](../plan.md).
 - Node Map (Leaflet) for nodes with GPS coordinates
 - Relay hub list: manual add, TCP probe, remove
 - **Routes** table and **Network Graph** (vis.js) — Phase 5
+- **Infrastructure** view: Wi-Fi LAN segments (`GET /api/infrastructure`), purple hexagons on Network Graph and Node Map
 - Subscribes to QuakeMeshHub's loopback management API (`127.0.0.1:8083/ws`)
 - Reads/writes `quakemeshhub.db` (shared with the Hub)
 

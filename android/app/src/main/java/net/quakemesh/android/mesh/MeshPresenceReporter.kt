@@ -2,9 +2,11 @@
 //
 // Changelog:
 //   0.0.17 - POST periodic heartbeats to QuakeMeshHub for Monitor visibility.
+//   0.0.19 - optional lan_context on heartbeat for infrastructure segments.
 
 package net.quakemesh.android.mesh
 
+import android.content.Context
 import android.util.Log
 import net.quakemesh.android.location.LocationReporter
 import org.json.JSONObject
@@ -17,6 +19,7 @@ import kotlin.concurrent.thread
  * QuakeMeshHub [node heartbeat] endpoint so the node appears in Monitor.
  */
 class MeshPresenceReporter(
+    private val context: Context,
     private val nodeIdHex: String,
     private val hubBaseUrl: String,
     private val location: () -> LocationReporter.LocationFix?,
@@ -58,6 +61,13 @@ class MeshPresenceReporter(
                 body.put("lat", fix.lat)
                     .put("lon", fix.lon)
                     .put("accuracy_m", fix.accuracyM.toDouble())
+            }
+            LanContextCollector.collect(context)?.let { lan ->
+                val ctx = JSONObject().put("gateway_ip", lan.gatewayIp)
+                lan.localIp?.let { ctx.put("local_ip", it) }
+                lan.ssid?.let { ctx.put("ssid", it) }
+                lan.bssid?.let { ctx.put("bssid", it) }
+                body.put("lan_context", ctx)
             }
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"

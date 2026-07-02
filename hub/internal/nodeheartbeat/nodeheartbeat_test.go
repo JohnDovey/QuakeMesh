@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.17 - node heartbeat tests.
+//   0.0.19 - heartbeat lan_context upserts infrastructure segment.
 
 package nodeheartbeat
 
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/lansegments"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
@@ -75,6 +77,61 @@ func TestServer_HeartbeatRegistersNode(t *testing.T) {
 		t.Fatalf("lat = %v", nodes[0].LastLat)
 	}
 	_ = time.Now()
+}
+
+func TestServer_HeartbeatLanContextUpsertsSegment(t *testing.T) {
+	db, err := storage.Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	reg := registry.New(db)
+	segments := lansegments.NewStore(db)
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Registry:   reg,
+		Notifier:   &recordingNotifier{},
+		Segments:   segments,
+	})
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { srv.Close() })
+
+	var nodeID identity.NodeID
+	nodeID[8] = 0xef
+	body, _ := json.Marshal(map[string]any{
+		"node_id": nodeID.String(),
+		"lan_context": map[string]string{
+			"gateway_ip": "10.1.1.1",
+			"local_ip":   "10.1.1.50",
+			"ssid":       "CampNet",
+			"bssid":      "de:ad:be:ef:00:01",
+		},
+	})
+	base := "http://" + srv.Addr().String()
+	rec, err := http.Post(base+"/v1/heartbeat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.Body.Close()
+	if rec.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", rec.StatusCode)
+	}
+	list, err := segments.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("segments = %d", len(list))
+	}
+	if list[0].GatewayIP != "10.1.1.1" || list[0].SSID != "CampNet" {
+		t.Fatalf("segment = %+v", list[0])
+	}
+	if len(list[0].NodeIDs) != 1 || list[0].NodeIDs[0] != nodeID.String() {
+		t.Fatalf("members = %+v", list[0].NodeIDs)
+	}
 }
 
 type recordingSOSNotifier struct {

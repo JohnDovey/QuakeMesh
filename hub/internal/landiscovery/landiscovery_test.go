@@ -56,7 +56,7 @@ func TestEngine_NodeBeaconRegistersNode(t *testing.T) {
 	var nodeID identity.NodeID
 	nodeID[2] = 0x22
 	lat, lon := -36.85, 174.76
-	payload, err := lanbeacon.NodeBeacon(nodeID.String(), &lat, &lon, nil)
+	payload, err := lanbeacon.NodeBeacon(nodeID.String(), &lat, &lon, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

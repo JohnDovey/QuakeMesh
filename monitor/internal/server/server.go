@@ -7,6 +7,7 @@
 //   0.0.9 - /api/trust-scores for Phase 7 trust register view.
 //   0.0.11 - /api/metrics/hop-latency and /api/internet-fallback.
 //   0.0.12 - /api/app-stats for Phase 10 App Stats view.
+//   0.0.19 - /api/infrastructure for Wi-Fi LAN segments.
 
 package server
 
@@ -80,6 +81,7 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/api/metrics/hop-latency", s.requireAuth(s.handleHopLatency))
 	mux.HandleFunc("/api/internet-fallback", s.requireAuth(s.handleInternetFallback))
 	mux.HandleFunc("/api/app-stats", s.requireAuth(s.handleAppStats))
+	mux.HandleFunc("/api/infrastructure", s.requireAuth(s.handleInfrastructure))
 	mux.HandleFunc("/api/ban-list", s.requireAuth(s.handleBanList))
 	mux.HandleFunc("/api/ban-list/", s.requireAuth(s.handleBanListAction))
 	mux.HandleFunc("/api/sos-alerts", s.requireAuth(s.handleSosAlerts))
@@ -392,6 +394,22 @@ func (s *Server) handleAppStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, stats)
+}
+
+func (s *Server) handleInfrastructure(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	segments, err := s.cfg.Data.Infrastructure()
+	if err != nil {
+		http.Error(w, "infrastructure query failed", http.StatusInternalServerError)
+		return
+	}
+	if segments == nil {
+		segments = []datastore.InfrastructureSegment{}
+	}
+	writeJSON(w, segments)
 }
 
 func (s *Server) handleSosAlerts(w http.ResponseWriter, r *http.Request) {

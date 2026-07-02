@@ -131,7 +131,7 @@ object MeshEngine {
         val n = node ?: return
         if (hubHeartbeatUrl.isBlank()) return
         presenceReporter?.stop()
-        presenceReporter = MeshPresenceReporter(n.nodeId, hubHeartbeatUrl) {
+        presenceReporter = MeshPresenceReporter(context.applicationContext, n.nodeId, hubHeartbeatUrl) {
             locationReporter?.latestFix()
         }.also { it.start(sendImmediately = true) }
     }

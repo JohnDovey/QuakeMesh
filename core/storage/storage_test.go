@@ -85,6 +85,8 @@ func TestOpen_AllTablesExist(t *testing.T) {
 		"historical_metrics",
 		"admin_users",
 		"config",
+		"lan_segments",
+		"lan_segment_members",
 	}
 
 	for _, table := range wantTables {

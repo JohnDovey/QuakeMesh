@@ -9,6 +9,8 @@
 //           no longer be NOT NULL.
 //   0.0.7 - migration3: hub_registry gains first_seen, last_seen, and
 //           status so QuakeMeshMonitor can track backbone hubs like nodes.
+//   0.0.19 - migration4: lan_segments and lan_segment_members for
+//           Wi-Fi infrastructure view in Monitor.
 
 package storage
 
@@ -19,6 +21,7 @@ var Migrations = []Migration{
 	{Version: 1, SQL: migration1},
 	{Version: 2, SQL: migration2},
 	{Version: 3, SQL: migration3},
+	{Version: 4, SQL: migration4},
 }
 
 // migration1 creates every table listed in "Storage - SQLite Everywhere"
@@ -171,4 +174,28 @@ INSERT INTO hub_registry_v2 (hub_id, last_ip, last_port, relay_capable, first_se
 	SELECT hub_id, last_ip, last_port, relay_capable, 0, 0, 'online' FROM hub_registry;
 DROP TABLE hub_registry;
 ALTER TABLE hub_registry_v2 RENAME TO hub_registry;
+`
+
+// migration4 adds Wi-Fi LAN segment tracking for the infrastructure layer.
+const migration4 = `
+CREATE TABLE lan_segments (
+	segment_id     TEXT PRIMARY KEY,
+	gateway_ip     TEXT NOT NULL,
+	ssid           TEXT,
+	bssid          TEXT,
+	first_seen     INTEGER NOT NULL,
+	last_seen      INTEGER NOT NULL,
+	estimated_lat  REAL,
+	estimated_lon  REAL
+);
+
+CREATE TABLE lan_segment_members (
+	segment_id   TEXT NOT NULL REFERENCES lan_segments (segment_id),
+	entity_type  TEXT NOT NULL,
+	entity_id    BLOB NOT NULL,
+	local_ip     TEXT,
+	last_seen    INTEGER NOT NULL,
+	PRIMARY KEY (segment_id, entity_type, entity_id)
+);
+CREATE INDEX idx_lan_segment_members_entity ON lan_segment_members (entity_type, entity_id);
 `

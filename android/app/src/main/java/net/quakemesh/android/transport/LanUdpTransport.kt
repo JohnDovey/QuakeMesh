@@ -3,11 +3,13 @@
 // Changelog:
 //   0.0.5 - Phase 4: connected Wi-Fi LAN multicast discovery + UDP frames.
 //   0.0.18 - LAN presence beacons for hub auto-discovery.
+//   0.0.19 - lan_context on node LAN beacons.
 
 package net.quakemesh.android.transport
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import net.quakemesh.android.mesh.LanContextCollector
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.MulticastSocket
@@ -105,11 +107,15 @@ class LanUdpTransport(
             val id = nodeIdHex()
             if (id != null) {
                 val loc = location()
+                val lan = LanContextCollector.collect(context)?.let {
+                    LanBeacon.LanContext(it.gatewayIp, it.localIp, it.ssid, it.bssid)
+                }
                 val payload = LanBeacon.encodeNode(
                     id,
                     loc?.first,
                     loc?.second,
                     loc?.third?.toDouble(),
+                    lan,
                 )
                 val sock = socket
                 if (sock != null) {

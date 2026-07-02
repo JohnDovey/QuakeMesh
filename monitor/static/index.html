@@ -94,11 +94,13 @@
         <h2>Network Graph</h2>
         <p>
           Blue diamonds are backbone hubs; coloured dots are mesh nodes (colour = trust).
-          Solid arrows are active routes (hub routes are labelled &ldquo;hub&rdquo;).
+          Purple hexagons are Wi-Fi LAN segments (gateway/SSID). Solid arrows are active routes;
+          dashed lines connect members to their LAN segment.
         </p>
         <div class="graph-legend">
           <span class="legend-item"><span class="legend-swatch legend-hub"></span> Hub</span>
           <span class="legend-item"><span class="legend-swatch legend-node"></span> Node</span>
+          <span class="legend-item"><span class="legend-swatch legend-infra"></span> LAN segment</span>
         </div>
         <div id="network-graph" class="graph-panel"></div>
       </div>
@@ -109,6 +111,7 @@
         <h2>Node Map</h2>
         <p>
           Online nodes: coloured dots (trust score). Stale nodes: amber dashed pins with direction lines from the online-node centroid.
+          Purple hexagons mark Wi-Fi LAN gateways/segments (position estimated from member GPS).
         </p>
         <div id="map"></div>
         <h3>Orphaned / stale nodes</h3>

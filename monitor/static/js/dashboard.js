@@ -7,6 +7,8 @@ let trustByNode = {};
 let orphanHints = [];
 let orphanLayers = [];
 let routes = [];
+let infrastructure = [];
+let infraMapMarkers = {};
 let graphNetwork = null;
 let hopChart = null;
 let fallbackEnabled = false;
@@ -156,6 +158,7 @@ function refreshMapMarkers() {
     map.fitBounds(bounds.pad(0.2));
   }
   refreshOrphanMap();
+  refreshInfrastructureMap();
 }
 
 function formatBearing(deg) {
@@ -236,6 +239,7 @@ async function loadOrphanHints() {
   orphanHints = await api('/api/orphan-hints') || [];
   renderOrphanList();
   refreshOrphanMap();
+  refreshInfrastructureMap();
 }
 
 async function loadNodes() {
@@ -319,6 +323,73 @@ function renderRoutesTable() {
   }
 }
 
+function infraGraphID(segmentID) {
+  return `lan:${segmentID}`;
+}
+
+function infraLabel(seg) {
+  if (seg.ssid) return seg.ssid;
+  return seg.gateway_ip;
+}
+
+function infraGraphNode(seg) {
+  const label = infraLabel(seg);
+  const members = (seg.member_count ?? 0) || ((seg.node_ids?.length ?? 0) + (seg.hub_ids?.length ?? 0));
+  return {
+    id: infraGraphID(seg.segment_id),
+    label,
+    shape: 'hexagon',
+    size: 22,
+    font: { color: '#e7ecf1', size: 12 },
+    color: {
+      background: '#8957e5',
+      border: '#a371f7',
+      highlight: { background: '#a371f7', border: '#d2a8ff' },
+    },
+    title: `LAN segment\nGateway: ${seg.gateway_ip}\nSSID: ${seg.ssid || '—'}\nMembers: ${members}`,
+    group: 'infrastructure',
+  };
+}
+
+function refreshInfrastructureMap() {
+  if (!map) return;
+  const active = new Set();
+  for (const seg of infrastructure) {
+    if (seg.estimated_lat == null || seg.estimated_lon == null) continue;
+    active.add(seg.segment_id);
+    const members = (seg.member_count ?? 0) || ((seg.node_ids?.length ?? 0) + (seg.hub_ids?.length ?? 0));
+    const popup = `<strong>${seg.ssid || 'LAN segment'}</strong><br>`
+      + `Gateway: ${seg.gateway_ip}<br>`
+      + `Members: ${members}<br>`
+      + `Last seen: ${formatDateTime(seg.last_seen)}`;
+    if (!infraMapMarkers[seg.segment_id]) {
+      infraMapMarkers[seg.segment_id] = L.circleMarker([seg.estimated_lat, seg.estimated_lon], {
+        radius: 13,
+        color: '#a371f7',
+        fillColor: '#8957e5',
+        fillOpacity: 0.75,
+        weight: 2,
+        dashArray: '6 4',
+      }).addTo(map).bindPopup(popup);
+    } else {
+      infraMapMarkers[seg.segment_id].setLatLng([seg.estimated_lat, seg.estimated_lon]);
+      infraMapMarkers[seg.segment_id].setPopupContent(popup);
+    }
+  }
+  for (const id of Object.keys(infraMapMarkers)) {
+    if (!active.has(id)) {
+      map.removeLayer(infraMapMarkers[id]);
+      delete infraMapMarkers[id];
+    }
+  }
+}
+
+async function loadInfrastructure() {
+  infrastructure = await api('/api/infrastructure') || [];
+  refreshInfrastructureMap();
+  refreshGraph();
+}
+
 function hubGraphNode(h) {
   const online = h.status === 'online';
   return {
@@ -387,6 +458,7 @@ function ensureGraph() {
     groups: {
       hub: { shape: 'diamond' },
       node: { shape: 'dot' },
+      infrastructure: { shape: 'hexagon' },
     },
   });
   refreshGraph();
@@ -411,6 +483,9 @@ function refreshGraph() {
       nodeMap.set(r.next_hop, graphNodeForId(r.next_hop));
     }
   }
+  for (const seg of infrastructure) {
+    nodeMap.set(infraGraphID(seg.segment_id), infraGraphNode(seg));
+  }
 
   const edgeMap = new Map();
   for (const r of routes) {
@@ -428,6 +503,39 @@ function refreshGraph() {
       width: bothHubs ? 2.5 : 1,
       color: bothHubs ? { color: '#6cb6ff' } : { color: '#58a6ff' },
     });
+  }
+  for (const seg of infrastructure) {
+    const segID = infraGraphID(seg.segment_id);
+    for (const nodeID of seg.node_ids || []) {
+      if (!nodeMap.has(nodeID)) {
+        nodeMap.set(nodeID, graphNodeForId(nodeID));
+      }
+      const key = `${nodeID}->${segID}`;
+      edgeMap.set(key, {
+        id: key,
+        from: nodeID,
+        to: segID,
+        dashes: [8, 6],
+        width: 1.5,
+        color: { color: '#a371f7' },
+        title: 'LAN segment membership',
+      });
+    }
+    for (const hubID of seg.hub_ids || []) {
+      if (!nodeMap.has(hubID)) {
+        nodeMap.set(hubID, graphNodeForId(hubID));
+      }
+      const key = `${hubID}->${segID}`;
+      edgeMap.set(key, {
+        id: key,
+        from: hubID,
+        to: segID,
+        dashes: [8, 6],
+        width: 1.5,
+        color: { color: '#a371f7' },
+        title: 'LAN segment membership',
+      });
+    }
   }
 
   graphNetwork.setData({
@@ -657,11 +765,13 @@ connectWS((ev) => {
     loadNodes();
     loadTrustScores();
     loadOrphanHints();
+    loadInfrastructure();
     loadOverview();
   }
   if (ev.type === 'hub_status_changed') {
     loadHubs();
     loadRoutes();
+    loadInfrastructure();
     loadOverview();
   }
   if (ev.type === 'route_changed') {
@@ -695,6 +805,7 @@ connectWS((ev) => {
     await loadTrustScores();
     await loadOrphanHints();
     await loadRoutes();
+    await loadInfrastructure();
     await loadRelayHubs();
     await loadInternetFallback();
     await loadAppStats();

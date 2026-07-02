@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.18 - LAN multicast presence beacons for hub/node discovery.
+//   0.0.19 - optional lan_context on hub/node beacons.
 
 // Package lanbeacon defines the JSON UDP multicast format used on the
 // connected Wi-Fi LAN (see "LAN discovery" in /plan.md).
@@ -12,6 +13,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/JohnDovey/QuakeMesh/core/lancontext"
 )
 
 const (
@@ -41,9 +44,10 @@ type Message struct {
 	NodeID        string   `json:"node_id"`
 	HeartbeatPort int      `json:"heartbeat_port,omitempty"`
 	OGMPort       int      `json:"ogm_port,omitempty"`
-	Lat           *float64 `json:"lat,omitempty"`
-	Lon           *float64 `json:"lon,omitempty"`
-	AccuracyM     *float64 `json:"accuracy_m,omitempty"`
+	Lat           *float64           `json:"lat,omitempty"`
+	Lon           *float64           `json:"lon,omitempty"`
+	AccuracyM     *float64           `json:"accuracy_m,omitempty"`
+	LanContext    *lancontext.Context `json:"lan_context,omitempty"`
 }
 
 // Encode marshals a beacon with the QuakeMesh LAN prefix.
@@ -91,7 +95,7 @@ func IsBeacon(payload []byte) bool {
 }
 
 // HubBeacon builds a hub announcement.
-func HubBeacon(nodeID string, heartbeatPort, ogmPort int) ([]byte, error) {
+func HubBeacon(nodeID string, heartbeatPort, ogmPort int, lan *lancontext.Context) ([]byte, error) {
 	if heartbeatPort <= 0 || ogmPort <= 0 {
 		return nil, fmt.Errorf("lanbeacon: invalid hub ports heartbeat=%d ogm=%d", heartbeatPort, ogmPort)
 	}
@@ -101,18 +105,20 @@ func HubBeacon(nodeID string, heartbeatPort, ogmPort int) ([]byte, error) {
 		NodeID:        nodeID,
 		HeartbeatPort: heartbeatPort,
 		OGMPort:       ogmPort,
+		LanContext:    lan,
 	})
 }
 
 // NodeBeacon builds a node announcement.
-func NodeBeacon(nodeID string, lat, lon, accuracyM *float64) ([]byte, error) {
+func NodeBeacon(nodeID string, lat, lon, accuracyM *float64, lan *lancontext.Context) ([]byte, error) {
 	return Encode(Message{
-		V:         1,
-		Kind:      KindNode,
-		NodeID:    nodeID,
-		Lat:       lat,
-		Lon:       lon,
-		AccuracyM: accuracyM,
+		V:          1,
+		Kind:       KindNode,
+		NodeID:     nodeID,
+		Lat:        lat,
+		Lon:        lon,
+		AccuracyM:  accuracyM,
+		LanContext: lan,
 	})
 }
 

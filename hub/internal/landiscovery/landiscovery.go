@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.18 - LAN multicast hub/node discovery on connected Wi-Fi.
+//   0.0.19 - lan_context on beacons and segment membership recording.
 
 // Package landiscovery broadcasts hub presence and ingests node beacons on
 // the LAN multicast group defined in core/lanbeacon.
@@ -20,6 +21,8 @@ import (
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
 	"github.com/JohnDovey/QuakeMesh/core/lanbeacon"
+	"github.com/JohnDovey/QuakeMesh/core/lancontext"
+	"github.com/JohnDovey/QuakeMesh/core/lansegments"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/nodeheartbeat"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
@@ -33,6 +36,7 @@ type Config struct {
 	Interval      time.Duration
 	Registry      *registry.Registry
 	Notifier      nodeheartbeat.Notifier
+	Segments      *lansegments.Store
 }
 
 // Engine sends hub beacons and registers nodes from LAN announcements.
@@ -112,10 +116,18 @@ func (e *Engine) sendLoop(ctx context.Context) {
 }
 
 func (e *Engine) sendHubBeacon() {
+	var lan *lancontext.Context
+	if ctx := lancontext.Detect(); ctx.Valid() {
+		lan = &ctx
+		if e.cfg.Segments != nil {
+			_ = e.cfg.Segments.RecordMembership(lansegments.EntityHub, e.cfg.HubNodeID, ctx, time.Now())
+		}
+	}
 	payload, err := lanbeacon.HubBeacon(
 		e.cfg.HubNodeID.String(),
 		e.cfg.HeartbeatPort,
 		e.cfg.OGMPort,
+		lan,
 	)
 	if err != nil {
 		log.Printf("landiscovery: hub beacon: %v", err)
@@ -174,5 +186,9 @@ func (e *Engine) handleNodeBeacon(msg lanbeacon.Message) {
 		time.Now(),
 	); err != nil {
 		log.Printf("landiscovery: register node %s: %v", msg.NodeID, err)
+		return
+	}
+	if msg.LanContext != nil && e.cfg.Segments != nil {
+		_ = e.cfg.Segments.RecordMembership(lansegments.EntityNode, nodeID, *msg.LanContext, time.Now())
 	}
 }

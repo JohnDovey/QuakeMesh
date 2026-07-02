@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.17 - LAN HTTP heartbeat so mesh nodes (e.g. Android) appear in Monitor.
+//   0.0.19 - optional lan_context on heartbeat for infrastructure segments.
 
 // Package nodeheartbeat accepts periodic presence reports from mesh nodes
 // that are not yet speaking the hub OGM protocol (Phase 4 Android stub).
@@ -19,6 +20,8 @@ import (
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/lancontext"
+	"github.com/JohnDovey/QuakeMesh/core/lansegments"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/registry"
 )
 
@@ -43,6 +46,7 @@ type Config struct {
 	Registry    *registry.Registry
 	Notifier    Notifier
 	SOSNotifier SOSNotifier
+	Segments    *lansegments.Store
 }
 
 // Server accepts POST /v1/heartbeat from mesh nodes on the LAN.
@@ -104,10 +108,11 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		NodeID    string   `json:"node_id"`
-		Lat       *float64 `json:"lat"`
-		Lon       *float64 `json:"lon"`
-		AccuracyM *float64 `json:"accuracy_m"`
+		NodeID     string              `json:"node_id"`
+		Lat        *float64            `json:"lat"`
+		Lon        *float64            `json:"lon"`
+		AccuracyM  *float64            `json:"accuracy_m"`
+		LanContext *lancontext.Context `json:"lan_context"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NodeID == "" {
 		http.Error(w, "node_id required", http.StatusBadRequest)
@@ -126,6 +131,13 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "registry failed", http.StatusInternalServerError)
 		return
+	}
+	if body.LanContext != nil && s.cfg.Segments != nil {
+		ctx := *body.LanContext
+		if ctx.LocalIP == "" {
+			ctx.LocalIP = lancontext.LocalIPFromRemoteAddr(r.RemoteAddr)
+		}
+		_ = s.cfg.Segments.RecordMembership(lansegments.EntityNode, nodeID, ctx, now)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})

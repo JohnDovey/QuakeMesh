@@ -9,6 +9,7 @@
 //   0.0.11 - Hop latency history and internet-fallback config for Monitor.
 //   0.0.12 - App Stats from app_presence table.
 //   0.0.13 - Ban list proposals, verdicts, and local enforcement status.
+//   0.0.19 - LAN infrastructure segments for Wi-Fi gateway view.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -27,6 +28,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/core/apppresence"
 	"github.com/JohnDovey/QuakeMesh/core/banlist"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/lansegments"
 	"github.com/JohnDovey/QuakeMesh/core/location"
 	"github.com/JohnDovey/QuakeMesh/core/metrics"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
@@ -138,6 +140,21 @@ type AppStat struct {
 	NodeCount  int       `json:"node_count"`
 	FirstSeen  time.Time `json:"first_seen"`
 	LastSeen   time.Time `json:"last_seen"`
+}
+
+// InfrastructureSegment is a Wi-Fi LAN segment with connected members.
+type InfrastructureSegment struct {
+	SegmentID    string    `json:"segment_id"`
+	GatewayIP    string    `json:"gateway_ip"`
+	SSID         string    `json:"ssid,omitempty"`
+	BSSID        string    `json:"bssid,omitempty"`
+	FirstSeen    time.Time `json:"first_seen"`
+	LastSeen     time.Time `json:"last_seen"`
+	EstimatedLat *float64  `json:"estimated_lat,omitempty"`
+	EstimatedLon *float64  `json:"estimated_lon,omitempty"`
+	NodeIDs      []string  `json:"node_ids"`
+	HubIDs       []string  `json:"hub_ids"`
+	MemberCount  int       `json:"member_count"`
 }
 
 // Nodes returns mesh nodes, excluding backbone hubs in hub_registry.
@@ -652,6 +669,38 @@ func (s *Store) BanList() ([]BanEntry, error) {
 		entries = append(entries, e)
 	}
 	return entries, nil
+}
+
+// Infrastructure returns Wi-Fi LAN segments and their node/hub members.
+func (s *Store) Infrastructure() ([]InfrastructureSegment, error) {
+	rows, err := lansegments.NewStore(s.db).List()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]InfrastructureSegment, 0, len(rows))
+	for _, row := range rows {
+		seg := InfrastructureSegment{
+			SegmentID: row.SegmentID,
+			GatewayIP: row.GatewayIP,
+			SSID:      row.SSID,
+			BSSID:     row.BSSID,
+			FirstSeen: row.FirstSeen,
+			LastSeen:  row.LastSeen,
+			NodeIDs:   row.NodeIDs,
+			HubIDs:    row.HubIDs,
+		}
+		if row.EstimatedLat != nil {
+			v := *row.EstimatedLat
+			seg.EstimatedLat = &v
+		}
+		if row.EstimatedLon != nil {
+			v := *row.EstimatedLon
+			seg.EstimatedLon = &v
+		}
+		seg.MemberCount = len(row.NodeIDs) + len(row.HubIDs)
+		out = append(out, seg)
+	}
+	return out, nil
 }
 
 // ProposeBan creates a new ban proposal from the local hub.

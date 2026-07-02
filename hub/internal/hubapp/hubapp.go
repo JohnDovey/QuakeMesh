@@ -23,6 +23,7 @@ import (
 	"github.com/JohnDovey/QuakeMesh/core/banlist"
 	"github.com/JohnDovey/QuakeMesh/core/dtn"
 	"github.com/JohnDovey/QuakeMesh/core/identity"
+	"github.com/JohnDovey/QuakeMesh/core/lansegments"
 	"github.com/JohnDovey/QuakeMesh/core/metrics"
 	"github.com/JohnDovey/QuakeMesh/core/storage"
 	"github.com/JohnDovey/QuakeMesh/core/trust"
@@ -128,6 +129,7 @@ func New(cfg Config) (*Hub, error) {
 	}
 
 	reg := registry.New(db)
+	segmentStore := lansegments.NewStore(db)
 	api := managementapi.New(cfg.ManagementAddr)
 	cfgStore := configstore.New(db)
 	metricsStore := metrics.NewStore(db)
@@ -196,6 +198,7 @@ func New(cfg Config) (*Hub, error) {
 			Registry:    reg,
 			Notifier:    events,
 			SOSNotifier: api,
+			Segments:    segmentStore,
 		})
 	}
 
@@ -210,6 +213,7 @@ func New(cfg Config) (*Hub, error) {
 			OGMPort:       ogmPort,
 			Registry:      reg,
 			Notifier:      events,
+			Segments:      segmentStore,
 		})
 	}
 

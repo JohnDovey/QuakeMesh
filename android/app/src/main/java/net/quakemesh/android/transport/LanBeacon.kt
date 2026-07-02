@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.18 - LAN multicast presence beacons (matches core/lanbeacon).
+//   0.0.19 - optional lan_context on node beacons.
 
 package net.quakemesh.android.transport
 
@@ -25,11 +26,19 @@ object LanBeacon {
         return PREFIX.indices.all { payload[it] == PREFIX[it] }
     }
 
+    data class LanContext(
+        val gatewayIp: String,
+        val localIp: String? = null,
+        val ssid: String? = null,
+        val bssid: String? = null,
+    )
+
     fun encodeNode(
         nodeId: String,
         lat: Double?,
         lon: Double?,
         accuracyM: Double?,
+        lan: LanContext? = null,
     ): ByteArray {
         val json = JSONObject()
             .put("v", 1)
@@ -41,7 +50,28 @@ object LanBeacon {
                 json.put("accuracy_m", accuracyM)
             }
         }
+        lan?.let { putLanContext(json, it) }
         return PREFIX + json.toString().toByteArray(Charsets.UTF_8)
+    }
+
+    private fun putLanContext(json: JSONObject, lan: LanContext) {
+        val ctx = JSONObject().put("gateway_ip", lan.gatewayIp)
+        lan.localIp?.let { ctx.put("local_ip", it) }
+        lan.ssid?.let { ctx.put("ssid", it) }
+        lan.bssid?.let { ctx.put("bssid", it) }
+        json.put("lan_context", ctx)
+    }
+
+    fun lanContextFromJson(obj: JSONObject?): LanContext? {
+        if (obj == null) return null
+        val gateway = obj.optString("gateway_ip")
+        if (gateway.isBlank()) return null
+        return LanContext(
+            gatewayIp = gateway,
+            localIp = obj.optString("local_ip").takeIf { it.isNotBlank() },
+            ssid = obj.optString("ssid").takeIf { it.isNotBlank() },
+            bssid = obj.optString("bssid").takeIf { it.isNotBlank() },
+        )
     }
 
     fun decodeHub(payload: ByteArray): HubBeacon? {

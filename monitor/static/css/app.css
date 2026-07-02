@@ -116,3 +116,8 @@ label.toggle input { width: 1rem; height: 1rem; }
   border-radius: 50%;
   background: #3fb950;
 }
+.legend-infra {
+  background: #8957e5;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  border: none;
+}
