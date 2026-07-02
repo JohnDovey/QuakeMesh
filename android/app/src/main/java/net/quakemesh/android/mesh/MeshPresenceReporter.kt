@@ -3,6 +3,7 @@
 // Changelog:
 //   0.0.17 - POST periodic heartbeats to QuakeMeshHub for Monitor visibility.
 //   0.0.19 - optional lan_context on heartbeat for infrastructure segments.
+//   0.0.25 - Join worker thread on stop for restart-safe lifecycle.
 
 package net.quakemesh.android.mesh
 
@@ -28,7 +29,8 @@ class MeshPresenceReporter(
     private var worker: Thread? = null
 
     fun start(sendImmediately: Boolean = false) {
-        if (hubBaseUrl.isBlank() || running) return
+        if (hubBaseUrl.isBlank()) return
+        stop()
         running = true
         worker = thread(name = "MeshPresence") {
             if (sendImmediately) {
@@ -49,6 +51,7 @@ class MeshPresenceReporter(
     fun stop() {
         running = false
         worker?.interrupt()
+        runCatching { worker?.join(2_000) }
         worker = null
     }
 

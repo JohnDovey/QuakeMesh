@@ -4,6 +4,7 @@
 //   0.0.5 - Phase 4: coordinates mesh node + platform transports.
 //   0.0.10 - Phase 8: LocationReporter for GPS sampling.
 //   0.0.18 - LAN hub auto-discovery + optional manual heartbeat URL.
+//   0.0.25 - Synchronized restart-safe start/stop lifecycle.
 
 package net.quakemesh.android.mesh
 
@@ -16,6 +17,7 @@ import net.quakemesh.android.transport.WifiMeshTransport
 import java.util.concurrent.CopyOnWriteArrayList
 
 object MeshEngine {
+    private val lifecycleLock = Any()
     private val transports = CopyOnWriteArrayList<Transport>()
     private var node: MeshNode? = null
     private var appContext: Context? = null
@@ -51,44 +53,54 @@ object MeshEngine {
     }
 
     fun start(context: Context) {
-        if (node != null) return
-        appContext = context.applicationContext
-        val n = MeshNodeFactory.open(context)
-        node = n
-        MeshDiscovery.setLocalNodeId(n.nodeId)
-        locationReporter = LocationReporter(context.applicationContext).also { it.start() }
-        MeshLocalApi.start(n.nodeId)
-        if (n is StubMeshNode) {
-            n.setOutboundHandler { peer, frame ->
-                transports.forEach { it.send(peer, frame) }
+        synchronized(lifecycleLock) {
+            if (isRunning) return
+            stopUnlocked()
+            appContext = context.applicationContext
+            val n = MeshNodeFactory.open(context)
+            node = n
+            MeshDiscovery.setLocalNodeId(n.nodeId)
+            locationReporter = LocationReporter(context.applicationContext).also { it.start() }
+            MeshLocalApi.start(n.nodeId)
+            if (n is StubMeshNode) {
+                n.setOutboundHandler { peer, frame ->
+                    transports.forEach { it.send(peer, frame) }
+                }
             }
+            val lan = LanUdpTransport(
+                context,
+                nodeIdHex = { node?.nodeId },
+                location = {
+                    locationReporter?.latestFix()?.let { Triple(it.lat, it.lon, it.accuracyM) }
+                },
+                onHubDiscovered = { url -> onHubDiscovered(url) },
+            ) { peer, frame -> n.onFrameReceived(peer, frame) }
+            val ble = BleTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
+            val wifi = WifiMeshTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
+            listOf(lan, ble, wifi).forEach {
+                transports.add(it)
+                it.start()
+            }
+            startPresenceReporter()
+            val hubNote = when {
+                hubHeartbeatUrl.isNotBlank() && hubManualOverride -> " (manual hub URL)"
+                hubHeartbeatUrl.isNotBlank() -> " (hub $hubHeartbeatUrl)"
+                else -> " (discovering hub on LAN…)"
+            }
+            isRunning = true
+            notifyStatus("Mesh running — node ${n.nodeId.take(12)}…$hubNote")
         }
-        val lan = LanUdpTransport(
-            context,
-            nodeIdHex = { node?.nodeId },
-            location = {
-                locationReporter?.latestFix()?.let { Triple(it.lat, it.lon, it.accuracyM) }
-            },
-            onHubDiscovered = { url -> onHubDiscovered(url) },
-        ) { peer, frame -> n.onFrameReceived(peer, frame) }
-        val ble = BleTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
-        val wifi = WifiMeshTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
-        listOf(lan, ble, wifi).forEach {
-            transports.add(it)
-            it.start()
-        }
-        startPresenceReporter()
-        val hubNote = when {
-            hubHeartbeatUrl.isNotBlank() && hubManualOverride -> " (manual hub URL)"
-            hubHeartbeatUrl.isNotBlank() -> " (hub $hubHeartbeatUrl)"
-            else -> " (discovering hub on LAN…)"
-        }
-        isRunning = true
-        notifyStatus("Mesh running — node ${n.nodeId.take(12)}…$hubNote")
     }
 
     fun stop() {
-        if (!isRunning && node == null) return
+        synchronized(lifecycleLock) {
+            stopUnlocked()
+        }
+    }
+
+    private fun stopUnlocked() {
+        if (!isRunning && node == null && transports.isEmpty()) return
+        val wasRunning = isRunning
         MeshLocalApi.stop()
         presenceReporter?.stop()
         presenceReporter = null
@@ -103,7 +115,9 @@ object MeshEngine {
         MeshDiscovery.setLocalNodeId(null)
         MeshDiscovery.clear()
         isRunning = false
-        notifyStatus("Mesh stopped")
+        if (wasRunning) {
+            notifyStatus("Mesh stopped")
+        }
     }
 
     fun nodeId(): String? = node?.nodeId

@@ -2,14 +2,17 @@
 //
 // Changelog:
 //   0.0.12 - Phase 10: loopback HTTP mesh-sdk daemon for Android.
+//   0.0.25 - Restart-safe server socket lifecycle (join thread, SO_REUSEADDR).
 
 package net.quakemesh.android.mesh
 
 import android.util.Base64
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.security.SecureRandom
@@ -24,8 +27,10 @@ import kotlin.concurrent.thread
  */
 object MeshLocalApi {
     const val DEFAULT_PORT = 18084
+    private const val TAG = "MeshLocalApi"
 
     private val executor = Executors.newCachedThreadPool()
+    private val lifecycleLock = Any()
     private val sessions = ConcurrentHashMap<String, Session>()
     private val inbox = ConcurrentHashMap<String, CopyOnWriteArrayList<ByteArray>>()
     private val topics = ConcurrentHashMap<String, ConcurrentHashMap<String, CopyOnWriteArrayList<ByteArray>>>()
@@ -36,24 +41,46 @@ object MeshLocalApi {
     data class Session(val token: String, val nodeId: String, val appId: String)
 
     fun start(nodeId: String, port: Int = DEFAULT_PORT) {
-        if (serverThread?.isAlive == true) return
-        nodeIdHex = nodeId
-        serverThread = thread(name = "MeshLocalApi") {
-            ServerSocket(port).use { server ->
-                while (!Thread.currentThread().isInterrupted) {
-                    val socket = server.accept()
-                    executor.execute { handle(socket) }
+        synchronized(lifecycleLock) {
+            stopLocked()
+            nodeIdHex = nodeId
+            val worker = thread(name = "MeshLocalApi", isDaemon = true) {
+                try {
+                    ServerSocket().use { server ->
+                        server.reuseAddress = true
+                        server.bind(InetSocketAddress(port))
+                        while (!Thread.currentThread().isInterrupted) {
+                            val socket = server.accept()
+                            executor.execute { handle(socket) }
+                        }
+                    }
+                } catch (_: InterruptedException) {
+                } catch (e: Exception) {
+                    if (!Thread.currentThread().isInterrupted) {
+                        Log.w(TAG, "server stopped: ${e.message}")
+                    }
                 }
             }
+            serverThread = worker
         }
     }
 
     fun stop() {
-        serverThread?.interrupt()
+        synchronized(lifecycleLock) {
+            stopLocked()
+        }
+    }
+
+    private fun stopLocked() {
+        val worker = serverThread
+        if (worker == null) return
+        worker.interrupt()
+        runCatching { worker.join(3_000) }
         serverThread = null
         sessions.clear()
         inbox.clear()
         topics.clear()
+        presence.clear()
     }
 
     fun deliverLocal(payload: ByteArray) {

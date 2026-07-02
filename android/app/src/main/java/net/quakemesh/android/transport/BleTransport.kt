@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.5 - Phase 4: BLE transport skeleton (advertise + scan service UUID).
+//   0.0.25 - Safe BLE advertise/scan teardown on restart.
 
 package net.quakemesh.android.transport
 
@@ -59,19 +60,21 @@ class BleTransport(
             .addServiceUuid(ParcelUuid(SERVICE_UUID))
             .setIncludeDeviceName(false)
             .build()
-        advertiser?.startAdvertising(settings, data, advertiseCallback)
+        runCatching { advertiser?.startAdvertising(settings, data, advertiseCallback) }
 
         val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
         val scanSettings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        scanner?.startScan(listOf(filter), scanSettings, scanCallback)
+        runCatching { scanner?.startScan(listOf(filter), scanSettings, scanCallback) }
     }
 
     override fun stop() {
         if (!running.compareAndSet(true, false)) return
-        advertiser?.stopAdvertising(advertiseCallback)
-        scanner?.stopScan(scanCallback)
+        runCatching { advertiser?.stopAdvertising(advertiseCallback) }
+        runCatching { scanner?.stopScan(scanCallback) }
+        advertiser = null
+        scanner = null
     }
 
     override fun send(peerHex: String, frame: ByteArray) {

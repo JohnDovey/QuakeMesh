@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
             if (meshRunning) {
                 MeshForegroundService.stop(this)
                 meshRunning = false
+                refreshUi()
             } else {
                 requestPermissionsIfNeeded()
                 val hubUrl = hubUrlField.text.toString().trim()
@@ -99,8 +100,8 @@ class MainActivity : AppCompatActivity() {
                 MeshEngine.prepareStart(hubUrl)
                 MeshForegroundService.start(this)
                 meshRunning = true
+                refreshUi()
             }
-            refreshUi()
         }
 
         sdkDemoButton.setOnClickListener {

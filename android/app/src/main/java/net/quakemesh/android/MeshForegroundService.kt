@@ -2,6 +2,7 @@
 //
 // Changelog:
 //   0.0.5 - Phase 4: foreground service for continuous mesh participation.
+//   0.0.25 - Call startForeground before mesh startup; start mesh in onStartCommand.
 
 package net.quakemesh.android
 
@@ -32,8 +33,6 @@ class MeshForegroundService : Service() {
         super.onCreate()
         createChannel()
         MeshEngine.addStatusListener(notificationStatusListener)
-        MeshEngine.start(applicationContext)
-        startForeground(NOTIFICATION_ID, buildNotification("QuakeMesh mesh active"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -42,6 +41,8 @@ class MeshForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        startForeground(NOTIFICATION_ID, buildNotification("QuakeMesh mesh active"))
+        MeshEngine.start(applicationContext)
         return START_STICKY
     }
 

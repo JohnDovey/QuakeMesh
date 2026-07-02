@@ -4,11 +4,13 @@
 //   0.0.5 - Phase 4: connected Wi-Fi LAN multicast discovery + UDP frames.
 //   0.0.18 - LAN presence beacons for hub auto-discovery.
 //   0.0.19 - lan_context on node LAN beacons.
+//   0.0.25 - Join receiver threads on stop for restart-safe lifecycle.
 
 package net.quakemesh.android.transport
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.util.Log
 import net.quakemesh.android.mesh.LanContextCollector
 import java.net.DatagramPacket
 import java.net.InetAddress
@@ -30,6 +32,7 @@ class LanUdpTransport(
 
     override val name: String = "lan-udp"
 
+    private val lifecycleLock = Any()
     private val running = AtomicBoolean(false)
     private var socket: MulticastSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
@@ -37,20 +40,42 @@ class LanUdpTransport(
     private var beaconSender: Thread? = null
 
     override fun start() {
-        if (!running.compareAndSet(false, true)) return
-        thread(name = "lan-udp-receiver", isDaemon = true) {
-            runCatching { runReceiver() }.onFailure {
-                running.set(false)
+        synchronized(lifecycleLock) {
+            stopLocked()
+            running.set(true)
+            reader = thread(name = "lan-udp-receiver", isDaemon = true) {
+                try {
+                    runReceiver()
+                } catch (_: InterruptedException) {
+                } catch (e: Exception) {
+                    if (running.get()) {
+                        Log.w(TAG, "receiver stopped: ${e.message}")
+                    }
+                } finally {
+                    running.set(false)
+                }
             }
         }
     }
 
     override fun stop() {
+        synchronized(lifecycleLock) {
+            stopLocked()
+        }
+    }
+
+    private fun stopLocked() {
         running.set(false)
+        socket?.close()
         reader?.interrupt()
         beaconSender?.interrupt()
-        socket?.close()
-        multicastLock?.release()
+        runCatching { reader?.join(2_000) }
+        runCatching { beaconSender?.join(1_000) }
+        runCatching {
+            multicastLock?.let { lock ->
+                if (lock.isHeld) lock.release()
+            }
+        }
         socket = null
         multicastLock = null
         reader = null
@@ -128,6 +153,7 @@ class LanUdpTransport(
     }
 
     companion object {
+        private const val TAG = "LanUdpTransport"
         const val MULTICAST_GROUP = "239.255.42.99"
         const val MULTICAST_PORT = 47223
         const val UNICAST_PORT = 47224
