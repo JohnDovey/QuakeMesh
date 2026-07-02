@@ -71,7 +71,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="@string/sos_demo_button" />
+            android:text="@string/sos_button" />
 
         <EditText
             android:id="@+id/hub_heartbeat_url"

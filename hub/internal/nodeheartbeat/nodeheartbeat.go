@@ -27,11 +27,22 @@ type Notifier interface {
 	NodeStatusChanged(nodeID identity.NodeID, status registry.NodeStatus)
 }
 
+// SOSNotifier receives LAN SOS alerts for the Monitor event stream.
+type SOSNotifier interface {
+	SosAlertPublished(nodeID identity.NodeID, appID, topic string, payload []byte)
+}
+
+const (
+	sosAppID = "net.quakemesh.sosbeacon"
+	sosTopic = "sos"
+)
+
 // Config configures a heartbeat Server.
 type Config struct {
-	ListenAddr string // e.g. "0.0.0.0:18085"; empty disables
-	Registry   *registry.Registry
-	Notifier   Notifier
+	ListenAddr  string // e.g. "0.0.0.0:18085"; empty disables
+	Registry    *registry.Registry
+	Notifier    Notifier
+	SOSNotifier SOSNotifier
 }
 
 // Server accepts POST /v1/heartbeat from mesh nodes on the LAN.
@@ -46,6 +57,7 @@ func New(cfg Config) *Server {
 	s := &Server{cfg: cfg}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/heartbeat", s.handleHeartbeat)
+	mux.HandleFunc("/v1/sos", s.handleSOS)
 	s.httpServer = &http.Server{Handler: mux}
 	return s
 }
@@ -114,6 +126,52 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "registry failed", http.StatusInternalServerError)
 		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func (s *Server) handleSOS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		NodeID    string  `json:"node_id"`
+		Text      string  `json:"text"`
+		Lat       float64 `json:"lat"`
+		Lon       float64 `json:"lon"`
+		AccuracyM float64 `json:"accuracy_m"`
+		SentAt    int64   `json:"sent_at"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NodeID == "" {
+		http.Error(w, "node_id required", http.StatusBadRequest)
+		return
+	}
+	if body.Text == "" {
+		body.Text = "SOS — need assistance"
+	}
+	idBytes, err := hex.DecodeString(body.NodeID)
+	if err != nil || len(idBytes) != len(identity.NodeID{}) {
+		http.Error(w, "invalid node_id", http.StatusBadRequest)
+		return
+	}
+	var nodeID identity.NodeID
+	copy(nodeID[:], idBytes)
+
+	now := time.Now()
+	var lat, lon *float64
+	if body.Lat != 0 || body.Lon != 0 {
+		lat, lon = &body.Lat, &body.Lon
+	}
+	_, err = RegisterPresence(s.cfg.Registry, s.cfg.Notifier, nodeID, lat, lon, now)
+	if err != nil {
+		http.Error(w, "registry failed", http.StatusInternalServerError)
+		return
+	}
+	payload, _ := json.Marshal(body)
+	if s.cfg.SOSNotifier != nil {
+		s.cfg.SOSNotifier.SosAlertPublished(nodeID, sosAppID, sosTopic, payload)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})

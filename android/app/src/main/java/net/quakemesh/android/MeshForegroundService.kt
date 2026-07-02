@@ -23,29 +23,30 @@ import net.quakemesh.android.mesh.MeshEngine
  */
 class MeshForegroundService : Service() {
 
+    private val notificationStatusListener: (String) -> Unit = { msg ->
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIFICATION_ID, buildNotification(msg))
+    }
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        MeshEngine.statusListener = { msg ->
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.notify(NOTIFICATION_ID, buildNotification(msg))
-        }
+        MeshEngine.addStatusListener(notificationStatusListener)
         MeshEngine.start(applicationContext)
         startForeground(NOTIFICATION_ID, buildNotification("QuakeMesh mesh active"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                MeshEngine.stop()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
+        if (intent?.action == ACTION_STOP) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
+        MeshEngine.removeStatusListener(notificationStatusListener)
         MeshEngine.stop()
         super.onDestroy()
     }

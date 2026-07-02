@@ -192,9 +192,10 @@ func New(cfg Config) (*Hub, error) {
 	var heartbeat *nodeheartbeat.Server
 	if cfg.HeartbeatAddr != "" {
 		heartbeat = nodeheartbeat.New(nodeheartbeat.Config{
-			ListenAddr: cfg.HeartbeatAddr,
-			Registry:   reg,
-			Notifier:   events,
+			ListenAddr:  cfg.HeartbeatAddr,
+			Registry:    reg,
+			Notifier:    events,
+			SOSNotifier: api,
 		})
 	}
 

@@ -20,8 +20,24 @@ object MeshEngine {
     private var node: MeshNode? = null
     private var locationReporter: LocationReporter? = null
     private var presenceReporter: MeshPresenceReporter? = null
+    private val statusListeners = CopyOnWriteArrayList<(String) -> Unit>()
 
-    var statusListener: ((String) -> Unit)? = null
+    var isRunning: Boolean = false
+        private set
+
+    fun addStatusListener(listener: (String) -> Unit) {
+        statusListeners.add(listener)
+    }
+
+    fun removeStatusListener(listener: (String) -> Unit) {
+        statusListeners.remove(listener)
+    }
+
+    private fun notifyStatus(msg: String) {
+        statusListeners.forEach { listener ->
+            runCatching { listener(msg) }
+        }
+    }
     var hubHeartbeatUrl: String = ""
     var hubManualOverride: Boolean = false
     var discoveredHubUrl: String = ""
@@ -65,10 +81,12 @@ object MeshEngine {
             hubHeartbeatUrl.isNotBlank() -> " (hub $hubHeartbeatUrl)"
             else -> " (discovering hub on LAN…)"
         }
-        statusListener?.invoke("Mesh running — node ${n.nodeId.take(12)}…$hubNote")
+        isRunning = true
+        notifyStatus("Mesh running — node ${n.nodeId.take(12)}…$hubNote")
     }
 
     fun stop() {
+        if (!isRunning && node == null) return
         MeshLocalApi.stop()
         presenceReporter?.stop()
         presenceReporter = null
@@ -81,7 +99,8 @@ object MeshEngine {
         discoveredHubUrl = ""
         MeshDiscovery.setLocalNodeId(null)
         MeshDiscovery.clear()
-        statusListener?.invoke("Mesh stopped")
+        isRunning = false
+        notifyStatus("Mesh stopped")
     }
 
     fun nodeId(): String? = node?.nodeId
@@ -105,7 +124,7 @@ object MeshEngine {
         startPresenceReporter()
         val base = "Hub discovered at $url"
         val loc = locationSummary()
-        statusListener?.invoke(if (loc != null) "$base\nGPS: $loc" else base)
+        notifyStatus(if (loc != null) "$base\nGPS: $loc" else base)
     }
 
     private fun startPresenceReporter() {

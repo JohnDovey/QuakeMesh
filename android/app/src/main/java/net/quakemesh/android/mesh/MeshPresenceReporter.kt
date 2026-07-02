@@ -32,7 +32,11 @@ class MeshPresenceReporter(
                 sendHeartbeat()
             }
             while (running) {
-                Thread.sleep(INTERVAL_MS)
+                try {
+                    Thread.sleep(INTERVAL_MS)
+                } catch (_: InterruptedException) {
+                    break
+                }
                 if (!running) break
                 sendHeartbeat()
             }

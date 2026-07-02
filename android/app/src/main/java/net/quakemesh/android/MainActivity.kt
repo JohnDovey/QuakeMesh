@@ -21,10 +21,11 @@ import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.appcompat.app.AlertDialog
 import net.quakemesh.android.demo.ReferenceSdkDemo
-import net.quakemesh.android.demo.SosBeaconDemo
 import net.quakemesh.android.mesh.MeshDiscovery
 import net.quakemesh.android.mesh.MeshEngine
+import net.quakemesh.android.mesh.SosBeacon
 import net.quakemesh.android.ui.PeersAdapter
 import kotlin.concurrent.thread
 
@@ -44,6 +45,13 @@ class MainActivity : AppCompatActivity() {
 
     private var meshRunning = false
     private val prefs by lazy { getSharedPreferences("quakemesh_ui", MODE_PRIVATE) }
+
+    private val statusListener: (String) -> Unit = { msg ->
+        runOnUiThread {
+            val loc = MeshEngine.locationSummary()
+            statusView.text = if (loc != null) "$msg\nGPS: $loc" else msg
+        }
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -71,13 +79,6 @@ class MainActivity : AppCompatActivity() {
 
         peersList.layoutManager = LinearLayoutManager(this)
         peersList.adapter = peersAdapter
-
-        MeshEngine.statusListener = { msg ->
-            runOnUiThread {
-                val loc = MeshEngine.locationSummary()
-                statusView.text = if (loc != null) "$msg\nGPS: $loc" else msg
-            }
-        }
 
         MeshDiscovery.listener = {
             runOnUiThread { refreshPeersList() }
@@ -126,29 +127,28 @@ class MainActivity : AppCompatActivity() {
                 statusView.text = getString(R.string.sos_mesh_required)
                 return@setOnClickListener
             }
-            sosButton.isEnabled = false
-            statusView.text = getString(R.string.sos_sending)
-            thread(name = "SosBeacon") {
-                val lines = StringBuilder()
-                val ok = SosBeaconDemo.send(
-                    getString(R.string.sos_test_message),
-                    MeshEngine.latestLocation(),
-                ) { line ->
-                    lines.append(line).append('\n')
-                    runOnUiThread { statusView.text = lines.toString() }
-                }
-                runOnUiThread {
-                    sosButton.isEnabled = true
-                    if (ok) {
-                        lines.append(getString(R.string.sos_sent_ok))
-                        statusView.text = lines.toString()
-                    }
-                }
-            }
+            AlertDialog.Builder(this)
+                .setTitle(R.string.sos_confirm_title)
+                .setMessage(R.string.sos_confirm_message)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.sos_send) { _, _ -> sendSos() }
+                .show()
         }
 
         refreshUi()
         refreshPeersList()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        MeshEngine.addStatusListener(statusListener)
+        meshRunning = MeshEngine.isRunning
+        refreshUi()
+    }
+
+    override fun onStop() {
+        MeshEngine.removeStatusListener(statusListener)
+        super.onStop()
     }
 
     override fun onBackPressed() {
@@ -156,6 +156,28 @@ class MainActivity : AppCompatActivity() {
             drawerLayout.closeDrawer(GravityCompat.START)
         } else {
             super.onBackPressed()
+        }
+    }
+
+    private fun sendSos() {
+        sosButton.isEnabled = false
+        statusView.text = getString(R.string.sos_sending)
+        thread(name = "SosBeacon") {
+            val lines = StringBuilder()
+            val ok = SosBeacon.send(
+                getString(R.string.sos_message),
+                MeshEngine.latestLocation(),
+            ) { line ->
+                lines.append(line).append('\n')
+                runOnUiThread { statusView.text = lines.toString() }
+            }
+            runOnUiThread {
+                sosButton.isEnabled = true
+                if (ok) {
+                    lines.append(getString(R.string.sos_sent_ok))
+                    statusView.text = lines.toString()
+                }
+            }
         }
     }
 
@@ -203,6 +225,8 @@ class MainActivity : AppCompatActivity() {
         }
         if (!meshRunning) {
             statusView.text = getString(R.string.mesh_stopped)
+        } else if (!MeshEngine.isRunning) {
+            statusView.text = getString(R.string.mesh_starting)
         }
     }
 
