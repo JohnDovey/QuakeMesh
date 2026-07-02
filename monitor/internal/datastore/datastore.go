@@ -10,6 +10,7 @@
 //   0.0.12 - App Stats from app_presence table.
 //   0.0.13 - Ban list proposals, verdicts, and local enforcement status.
 //   0.0.19 - LAN infrastructure segments for Wi-Fi gateway view.
+//   0.0.25 - Hubs(): close hub_registry rows before nested trust/config queries.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -219,63 +220,79 @@ func (s *Store) Hubs() ([]Hub, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var hubs []Hub
-	trustStore := trust.NewStore(s.db)
-	localHub, _ := s.LocalHubID()
+	type hubRow struct {
+		id         identity.NodeID
+		ip         sql.NullString
+		port       sql.NullInt64
+		relay      int
+		firstMs    int64
+		lastMs     int64
+		status     string
+		manualLat  sql.NullFloat64
+		manualLon  sql.NullFloat64
+	}
+	var raw []hubRow
 	for rows.Next() {
 		var idBytes []byte
-		var ip sql.NullString
-		var port sql.NullInt64
-		var relay int
-		var firstMs, lastMs int64
-		var status string
-		var manualLat, manualLon sql.NullFloat64
-		if err := rows.Scan(&idBytes, &ip, &port, &relay, &firstMs, &lastMs, &status, &manualLat, &manualLon); err != nil {
+		var r hubRow
+		if err := rows.Scan(&idBytes, &r.ip, &r.port, &r.relay, &r.firstMs, &r.lastMs, &r.status, &r.manualLat, &r.manualLon); err != nil {
+			_ = rows.Close()
 			return nil, err
 		}
-		var id identity.NodeID
-		copy(id[:], idBytes)
+		copy(r.id[:], idBytes)
+		raw = append(raw, r)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	trustStore := trust.NewStore(s.db)
+	localHub, _ := s.LocalHubID()
+	hubs := make([]Hub, 0, len(raw))
+	for _, r := range raw {
 		h := Hub{
-			HubID:        id.String(),
-			RelayCapable: relay != 0,
-			Status:       status,
-			FirstSeen:    time.UnixMilli(firstMs),
-			LastSeen:     time.UnixMilli(lastMs),
+			HubID:        r.id.String(),
+			RelayCapable: r.relay != 0,
+			Status:       r.status,
+			FirstSeen:    time.UnixMilli(r.firstMs),
+			LastSeen:     time.UnixMilli(r.lastMs),
 		}
-		if ip.Valid {
-			h.LastIP = ip.String
+		if r.ip.Valid {
+			h.LastIP = r.ip.String
 		}
-		if port.Valid {
-			h.LastPort = int(port.Int64)
+		if r.port.Valid {
+			h.LastPort = int(r.port.Int64)
 		}
-		if manualLat.Valid {
-			v := manualLat.Float64
+		if r.manualLat.Valid {
+			v := r.manualLat.Float64
 			h.ManualLat = &v
 			h.Lat = &v
 		}
-		if manualLon.Valid {
-			v := manualLon.Float64
+		if r.manualLon.Valid {
+			v := r.manualLon.Float64
 			h.ManualLon = &v
 			h.Lon = &v
 		}
 		if h.Lat == nil {
-			if nrLat, nrLon, ok := s.nodeRegistryCoords(id); ok {
+			if nrLat, nrLon, ok := s.nodeRegistryCoords(r.id); ok {
 				h.Lat, h.Lon = &nrLat, &nrLon
 			}
 		}
-		if count, err := trustStore.EndorsementCount(id); err == nil {
+		if count, err := trustStore.EndorsementCount(r.id); err == nil {
 			h.EndorsementCount = count
 		}
 		if localHub != (identity.NodeID{}) {
-			if endorsed, err := trustStore.HasEndorsement(localHub, id); err == nil {
+			if endorsed, err := trustStore.HasEndorsement(localHub, r.id); err == nil {
 				h.LocalHubEndorsed = endorsed
 			}
 		}
 		hubs = append(hubs, h)
 	}
-	return hubs, rows.Err()
+	return hubs, nil
 }
 
 // Routes returns every route in the routing table.

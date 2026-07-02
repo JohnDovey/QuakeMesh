@@ -13,6 +13,15 @@ let hubMapMarkers = {};
 let graphNetwork = null;
 let hopChart = null;
 let fallbackEnabled = false;
+let loadHubsTimer = null;
+
+function scheduleLoadHubs() {
+  clearTimeout(loadHubsTimer);
+  loadHubsTimer = setTimeout(() => {
+    loadHubsTimer = null;
+    loadHubs();
+  }, 300);
+}
 
 if (typeof $ === 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
@@ -57,6 +66,7 @@ function showView(name) {
     setTimeout(() => graphNetwork?.fit(), 50);
   }
   if (name === 'hop-timing') loadHopLatency();
+  if (name === 'hubs') loadHubs();
 }
 
 function applyOverview(o) {
@@ -76,10 +86,10 @@ function applyOverview(o) {
 function refreshOverviewTablesIfNeeded() {
   const hubRows = document.getElementById('hubs-table-overview')?.rows.length ?? 0;
   const nodeRows = document.getElementById('nodes-table')?.rows.length ?? 0;
-  const hubTotal = parseInt(document.getElementById('stat-hubs-total')?.textContent ?? '0', 10);
-  const nodeTotal = parseInt(document.getElementById('stat-total')?.textContent ?? '0', 10);
-  if (hubTotal > 0 && hubRows === 0) loadHubs();
-  if (nodeTotal > 0 && nodeRows === 0) loadNodes();
+  const hubTotal = parseInt(document.getElementById('stat-hubs-total')?.textContent ?? '0', 10) || 0;
+  const nodeTotal = parseInt(document.getElementById('stat-total')?.textContent ?? '0', 10) || 0;
+  if (hubTotal > 0 && hubRows < hubTotal) scheduleLoadHubs();
+  if (nodeTotal > 0 && nodeRows < nodeTotal) loadNodes();
 }
 
 function setFallbackUI(enabled) {
@@ -342,7 +352,14 @@ async function loadNodes() {
 }
 
 async function loadHubs() {
-  const data = await api('/api/hubs');
+  let data;
+  try {
+    data = await api('/api/hubs');
+  } catch (err) {
+    console.error('load hubs:', err);
+    showBootError(err);
+    return;
+  }
   hubs = Array.isArray(data) ? data : [];
   hubIds = new Set(hubs.map((h) => h.hub_id).filter(Boolean));
   try {
@@ -975,13 +992,14 @@ connectWS((ev) => {
   }
   if (ev.type === 'node_status_changed') {
     loadNodes();
+    scheduleLoadHubs();
     loadTrustScores();
     loadOrphanHints();
     loadInfrastructure();
     loadOverview();
   }
   if (ev.type === 'hub_status_changed') {
-    loadHubs();
+    scheduleLoadHubs();
     loadRoutes();
     loadInfrastructure();
     loadOverview();
@@ -989,7 +1007,7 @@ connectWS((ev) => {
   if (ev.type === 'route_changed') {
     loadOverview();
     loadRoutes();
-    loadHubs();
+    scheduleLoadHubs();
     loadHopLatency();
   }
   if (ev.type === 'dtn_queue_depth_changed') {
