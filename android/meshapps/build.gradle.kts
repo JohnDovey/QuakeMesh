@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "net.quakemesh.android"
+    namespace = "net.quakemesh.meshapps.standalone"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "net.quakemesh.android"
+        applicationId = "net.quakemesh.meshapps"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.0.27"
+        versionCode = 1
+        versionName = "0.0.1"
     }
 
     buildFeatures {
@@ -31,13 +31,5 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
-    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
-    implementation("androidx.recyclerview:recyclerview:1.3.2")
-    implementation(project(":meshsdk"))
     implementation(project(":meshapps-lib"))
-
-    val meshAar = file("libs/meshcore.aar")
-    if (meshAar.exists()) {
-        implementation(files(meshAar))
-    }
 }

@@ -7,6 +7,8 @@
 # Usage examples:
 #   ./android-build.sh                      # :app:assembleDebug (default)
 #   ./android-build.sh :app:installDebug
+#   ./android-build.sh :meshapps:assembleDebug
+#   ./android-build.sh :meshapps:installDebug
 #   ./android-build.sh clean
 #
 # Make sure the JohnDovey drive is mounted.

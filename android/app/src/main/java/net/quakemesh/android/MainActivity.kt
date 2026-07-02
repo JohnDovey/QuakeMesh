@@ -3,9 +3,11 @@
 // Changelog:
 //   0.0.5 - Phase 4: mesh start/stop UI wired to foreground service.
 //   0.0.18 - version label, nearby peers drawer, hub override at bottom.
+//   0.0.26 - drawer entries for Private Chat and Discuss mesh apps.
 
 package net.quakemesh.android
 
+import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -13,6 +15,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -22,7 +25,9 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.appcompat.app.AlertDialog
-import net.quakemesh.android.demo.ReferenceSdkDemo
+import net.quakemesh.meshapps.DiscussActivity
+import net.quakemesh.meshapps.PrivateChatActivity
+import net.quakemesh.meshapps.R as MeshAppsR
 import net.quakemesh.android.mesh.MeshDiscovery
 import net.quakemesh.android.mesh.MeshEngine
 import net.quakemesh.android.mesh.SosBeacon
@@ -36,7 +41,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var nodeIdView: TextView
     private lateinit var versionView: TextView
     private lateinit var toggleButton: Button
-    private lateinit var sdkDemoButton: Button
     private lateinit var sosButton: Button
     private lateinit var hubUrlField: EditText
     private lateinit var peersList: RecyclerView
@@ -72,11 +76,20 @@ class MainActivity : AppCompatActivity() {
         nodeIdView = findViewById(R.id.node_id_text)
         versionView = findViewById(R.id.version_text)
         toggleButton = findViewById(R.id.toggle_mesh_button)
-        sdkDemoButton = findViewById(R.id.sdk_demo_button)
         sosButton = findViewById(R.id.sos_demo_button)
         hubUrlField = findViewById(R.id.hub_heartbeat_url)
         peersList = findViewById(R.id.peers_list)
         peersEmpty = findViewById(R.id.peers_empty)
+
+        findViewById<ImageButton>(R.id.open_drawer_button).setOnClickListener {
+            drawerLayout.openDrawer(GravityCompat.START)
+        }
+        findViewById<Button>(R.id.nav_private_chat).setOnClickListener {
+            openMeshApp(PrivateChatActivity::class.java)
+        }
+        findViewById<Button>(R.id.nav_discuss).setOnClickListener {
+            openMeshApp(DiscussActivity::class.java)
+        }
 
         versionView.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
         hubUrlField.setText(prefs.getString(PREF_HUB_URL, ""))
@@ -101,29 +114,6 @@ class MainActivity : AppCompatActivity() {
                 MeshForegroundService.start(this)
                 meshRunning = true
                 refreshUi()
-            }
-        }
-
-        sdkDemoButton.setOnClickListener {
-            if (!meshRunning) {
-                statusView.text = getString(R.string.sdk_demo_mesh_required)
-                return@setOnClickListener
-            }
-            sdkDemoButton.isEnabled = false
-            statusView.text = getString(R.string.sdk_demo_running)
-            thread(name = "SdkDemo") {
-                val lines = StringBuilder()
-                val ok = ReferenceSdkDemo.run { line ->
-                    lines.append(line).append('\n')
-                    runOnUiThread { statusView.text = lines.toString() }
-                }
-                runOnUiThread {
-                    sdkDemoButton.isEnabled = true
-                    if (ok) {
-                        lines.append(getString(R.string.sdk_demo_ok))
-                        statusView.text = lines.toString()
-                    }
-                }
             }
         }
 
@@ -190,6 +180,18 @@ class MainActivity : AppCompatActivity() {
         val peers = MeshDiscovery.peers()
         peersAdapter.submit(peers)
         peersEmpty.visibility = if (peers.isEmpty()) View.VISIBLE else View.GONE
+    }
+
+    private fun openMeshApp(activityClass: Class<*>) {
+        if (!MeshEngine.isRunning) {
+            AlertDialog.Builder(this)
+                .setMessage(MeshAppsR.string.mesh_app_required)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+            return
+        }
+        drawerLayout.closeDrawer(GravityCompat.START)
+        startActivity(Intent(this, activityClass))
     }
 
     private fun requestPermissionsIfNeeded() {

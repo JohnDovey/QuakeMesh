@@ -33,7 +33,7 @@ source /Volumes/JohnDovey/source-john-dovey.sh   # or ~/source-john-dovey.sh
 ./android-build.sh :app:installDebug
 ```
 
-Without `meshcore.aar`, the app uses **StubMeshNode** — enough for SDK demos and the loopback API on port 18084. Bind the Go core only when you need the full crypto/routing stack on a physical device.
+Without `meshcore.aar`, the app uses **StubMeshNode** — enough for the loopback mesh-sdk API on port 18084. Bind the Go core only when you need the full crypto/routing stack on a physical device.
 
 ### Showing this phone in QuakeMeshMonitor
 
@@ -44,7 +44,18 @@ Monitor lists nodes from **QuakeMeshHub**, not from the app alone. On the same W
 
 **Optional override:** if auto-discovery fails (guest Wi‑Fi, multicast blocked), enter **Hub URL override** manually, e.g. `http://<mac-ip>:18085` (`ipconfig getifaddr en0` on macOS).
 
-SDK demos and SOS on the phone use the **local** loopback API (`127.0.0.1:18084`) and do not reach the hub unless the hub heartbeat path is active or you use CLI tools against the hub socket.
+SOS on the phone uses the **local** loopback API (`127.0.0.1:18084`) and reaches Monitor when the hub heartbeat path is active.
+
+**Mesh apps** (drawer ☰): **Private Chat** and **Discuss** live in the shared `:meshapps-lib` module.
+
+**Standalone mesh apps APK** (`net.quakemesh.meshapps`, module `:meshapps`):
+
+```sh
+./android-build.sh :meshapps:assembleDebug
+./android-build.sh :meshapps:installDebug
+```
+
+Install **QuakeMesh Apps** alongside QuakeMesh. It talks to the loopback mesh-sdk API (`127.0.0.1:18084`) — **QuakeMesh must be running with mesh started** first. Same Private Chat / Discuss UIs as the drawer entries.
 
 Tap **Start mesh** in the app. A foreground notification appears while LAN/BLE/Wi-Fi transports are active.
 

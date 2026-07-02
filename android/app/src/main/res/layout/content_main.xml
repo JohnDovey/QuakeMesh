@@ -16,6 +16,14 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <ImageButton
+                android:id="@+id/open_drawer_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/open_drawer"
+                android:src="@android:drawable/ic_menu_sort_by_size" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -58,13 +66,6 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="@string/start_mesh" />
-
-        <Button
-            android:id="@+id/sdk_demo_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/sdk_demo_button" />
 
         <Button
             android:id="@+id/sos_demo_button"

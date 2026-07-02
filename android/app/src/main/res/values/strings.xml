@@ -2,7 +2,9 @@
 <resources>
     <string name="app_name">QuakeMesh</string>
     <string name="version_label">Ver: %1$s</string>
-    <string name="swipe_peers_hint">Swipe from the left edge for nearby hubs and nodes.</string>
+    <string name="swipe_peers_hint">Tap ☰ for apps and nearby peers.</string>
+    <string name="open_drawer">Open menu</string>
+    <string name="drawer_apps_title">Mesh apps</string>
     <string name="start_mesh">Start mesh</string>
     <string name="stop_mesh">Stop mesh</string>
     <string name="mesh_stopped">Mesh stopped</string>
@@ -10,10 +12,6 @@
     <string name="node_id_label">Node ID: %1$s</string>
     <string name="node_id_unknown">(start mesh)</string>
     <string name="hub_heartbeat_hint">Hub URL override (optional — auto-discovered on Wi‑Fi)</string>
-    <string name="sdk_demo_button">SDK demo (Phase 12)</string>
-    <string name="sdk_demo_mesh_required">Start the mesh before running the SDK demo.</string>
-    <string name="sdk_demo_running">Running SDK demo…</string>
-    <string name="sdk_demo_ok">SDK demo passed.</string>
     <string name="sos_button">SOS</string>
     <string name="sos_mesh_required">Start the mesh before sending SOS.</string>
     <string name="sos_confirm_title">Send emergency SOS?</string>

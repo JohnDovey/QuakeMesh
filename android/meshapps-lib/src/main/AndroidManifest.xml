@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name="net.quakemesh.meshapps.PrivateChatActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeshApps" />
+        <activity
+            android:name="net.quakemesh.meshapps.DiscussActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MeshApps" />
+    </application>
+</manifest>

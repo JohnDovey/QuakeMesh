@@ -19,5 +19,7 @@ dependencyResolutionManagement {
 }
 rootProject.name = "QuakeMesh"
 include(":app")
+include(":meshapps")
+include(":meshapps-lib")
 include(":meshsdk")
 project(":meshsdk").projectDir = file("../sdk/kotlin/meshsdk")

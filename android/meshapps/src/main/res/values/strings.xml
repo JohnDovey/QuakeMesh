@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">QuakeMesh Apps</string>
+    <string name="launcher_title">QuakeMesh mesh apps</string>
+    <string name="launcher_subtitle">Uses QuakeMesh transport on 127.0.0.1:18084. Start the QuakeMesh app and tap Start mesh first.</string>
+    <string name="launcher_private_chat">Private Chat</string>
+    <string name="launcher_discuss">Discuss</string>
+    <string name="launcher_transport_ok">Mesh transport reachable</string>
+    <string name="launcher_transport_missing">Mesh transport not reachable — open QuakeMesh and start the mesh</string>
+    <string name="version_label">v%1$s</string>
+</resources>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mesh_app_required">QuakeMesh mesh transport is not available. Open QuakeMesh, tap Start mesh, then try again.</string>
+    <string name="mesh_app_register_failed">Could not register with mesh SDK: %1$s</string>
+    <string name="private_chat_title">Private Chat</string>
+    <string name="private_chat_pick_peer">Choose chat peer</string>
+    <string name="private_chat_pick_peer_first">Choose a peer first.</string>
+    <string name="private_chat_no_peer">No peer selected</string>
+    <string name="private_chat_peer_selected">Chat with %1$s</string>
+    <string name="private_chat_no_peers">No other Private Chat peers found. Open Private Chat on another device on the same mesh.</string>
+    <string name="private_chat_message_hint">Message</string>
+    <string name="private_chat_send">Send</string>
+    <string name="private_chat_discover_failed">Peer discovery failed: %1$s</string>
+    <string name="private_chat_send_failed">Send failed: %1$s</string>
+    <string name="private_chat_receive_error">Receive stopped: %1$s</string>
+    <string name="discuss_title">Discuss</string>
+    <string name="discuss_topic_hint">Topic</string>
+    <string name="discuss_subscribe">Listen</string>
+    <string name="discuss_listening">Listening on topic “%1$s”</string>
+    <string name="discuss_post_hint">Post to topic</string>
+    <string name="discuss_post">Post</string>
+    <string name="discuss_post_failed">Post failed: %1$s</string>
+    <string name="discuss_subscribe_error">Subscribe stopped: %1$s</string>
+</resources>

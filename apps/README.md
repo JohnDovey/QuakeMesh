@@ -50,6 +50,17 @@ go run ./apps/sosbeacon -text "injured, need help" -lat -36.85 -lon 174.76 -acc 
 go run ./sdk/go/cmd/meshdemo -tcp 127.0.0.1:<hub-daemon-port>
 ```
 
-On Android, start the mesh and tap **SDK demo** in the QuakeMesh app to exercise `HttpMeshClient` against loopback `:18084`.
+On Android, start the mesh and use the built-in **SOS** button (same `sosbeacon` app id over loopback `:18084`).
 
 SOS alerts published via the hub daemon appear live in **QuakeMeshMonitor → SOS Alerts**.
+
+## Android
+
+| Install | Private Chat / Discuss |
+|---------|--------------------------|
+| **QuakeMesh** (host) | Drawer menu → mesh apps |
+| **QuakeMesh Apps** (`net.quakemesh.meshapps`) | Standalone APK; requires QuakeMesh mesh running on `127.0.0.1:18084` |
+
+Shared UI lives in `android/meshapps-lib/`. Build the standalone APK with `./android-build.sh :meshapps:assembleDebug`.
+
+Go CLIs in this folder remain for desktop/hub testing.
