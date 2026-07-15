@@ -22,9 +22,10 @@ import (
 
 // Config configures a runnable Monitor instance.
 type Config struct {
-	BindAddr  string
-	HubDBPath string
-	HubWSURL  string
+	BindAddr   string
+	HubDBPath  string
+	HubWSURL   string
+	AppVersion string
 }
 
 // Monitor is a running QuakeMeshMonitor instance.
@@ -57,12 +58,13 @@ func New(cfg Config, staticFS embed.FS) (*Monitor, error) {
 	sos := sosfeed.New()
 	hub := hubclient.New(cfg.HubWSURL)
 	srv := server.New(server.Config{
-		BindAddr: cfg.BindAddr,
-		StaticFS: staticFS,
-		Auth:     authStore,
-		Data:     data,
-		Hub:      hub,
-		SOS:      sos,
+		BindAddr:   cfg.BindAddr,
+		StaticFS:   staticFS,
+		Auth:       authStore,
+		Data:       data,
+		Hub:        hub,
+		SOS:        sos,
+		AppVersion: cfg.AppVersion,
 	})
 
 	return &Monitor{

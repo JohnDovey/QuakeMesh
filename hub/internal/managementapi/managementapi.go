@@ -7,6 +7,7 @@
 //           bound address (exposed via Addr) -- it was declared but
 //           never assigned, nil-panicking any caller that used it.
 //   0.0.7 - Phase 6: DtnQueueDepthChanged management event.
+//   1.0.2 - GET /sniff (+ /api/sniff) for MeshSniff discovery.
 
 // Package managementapi implements QuakeMeshHub's loopback management
 // API: an HTTP server exposing a /ws WebSocket endpoint that streams
@@ -46,6 +47,9 @@ type Server struct {
 
 	mu      sync.Mutex
 	clients map[chan []byte]struct{}
+
+	sniffMu sync.Mutex
+	sniff   SniffConfig
 }
 
 // New creates a Server that will bind to addr (e.g. "127.0.0.1:8083")
@@ -54,6 +58,8 @@ func New(addr string) *Server {
 	s := &Server{clients: make(map[chan []byte]struct{})}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", s.handleWS)
+	mux.HandleFunc("/sniff", s.handleSniff)
+	mux.HandleFunc("/api/sniff", s.handleSniff)
 	s.httpServer = &http.Server{Addr: addr, Handler: mux}
 	return s
 }

@@ -17,9 +17,10 @@
 //   0.0.25 - Reload hub tables when nodes refresh; heal partial hub table renders.
 //   1.0.0 - First public release.
 //   1.0.1 - Show node handles and home pins in dashboard/map.
+//   1.0.2 - GET /sniff (+ /api/sniff) for MeshSniff LAN discovery.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "1.0.1"
+const Version = "1.0.2"

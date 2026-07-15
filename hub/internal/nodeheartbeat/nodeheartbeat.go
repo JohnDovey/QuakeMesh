@@ -4,6 +4,7 @@
 //   0.0.17 - LAN HTTP heartbeat so mesh nodes (e.g. Android) appear in Monitor.
 //   0.0.19 - optional lan_context on heartbeat for infrastructure segments.
 //   0.0.22 - hub proximity on heartbeat; POST /v1/endorse for mesh nodes.
+//   1.0.2 - GET /sniff (+ /api/sniff) for MeshSniff LAN discovery.
 
 // Package nodeheartbeat accepts periodic presence reports from mesh nodes
 // that are not yet speaking the hub OGM protocol (Phase 4 Android stub).
@@ -44,13 +45,18 @@ const (
 
 // Config configures a heartbeat Server.
 type Config struct {
-	ListenAddr  string // e.g. "0.0.0.0:18085"; empty disables
-	Registry    *registry.Registry
-	Notifier    Notifier
-	SOSNotifier SOSNotifier
-	Segments    *lansegments.Store
-	Trust       *trust.Store
-	LocalHub    identity.NodeID
+	ListenAddr     string // e.g. "0.0.0.0:18085"; empty disables
+	Registry       *registry.Registry
+	Notifier       Notifier
+	SOSNotifier    SOSNotifier
+	Segments       *lansegments.Store
+	Trust          *trust.Store
+	LocalHub       identity.NodeID
+	AppVersion     string // release version advertised on GET /sniff
+	HeartbeatPort  int    // published in sniff payload (0 = derive from ListenAddr)
+	ManagementPort int    // optional management API port for sniff services
+	OGMPort        int    // optional OGM UDP port for sniff services
+	DiscoveryPort  int    // optional LAN discovery UDP port for sniff services
 }
 
 // Server accepts POST /v1/heartbeat from mesh nodes on the LAN.
@@ -67,6 +73,8 @@ func New(cfg Config) *Server {
 	mux.HandleFunc("/v1/heartbeat", s.handleHeartbeat)
 	mux.HandleFunc("/v1/sos", s.handleSOS)
 	mux.HandleFunc("/v1/endorse", s.handleEndorse)
+	mux.HandleFunc("/sniff", s.handleSniff)
+	mux.HandleFunc("/api/sniff", s.handleSniff)
 	s.httpServer = &http.Server{Handler: mux}
 	return s
 }

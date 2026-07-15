@@ -14,9 +14,10 @@
 //   0.0.10 - Phase 8: GPS fields on OGM; UpdateLocation in registry.
 //   1.0.0 - First public release.
 //   1.0.1 - Node handle and home location via heartbeat/discovery.
+//   1.0.2 - GET /sniff on heartbeat + management HTTP for MeshSniff.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "1.0.1"
+const Version = "1.0.2"

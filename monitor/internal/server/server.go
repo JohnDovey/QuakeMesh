@@ -9,6 +9,7 @@
 //   0.0.12 - /api/app-stats for Phase 10 App Stats view.
 //   0.0.19 - /api/infrastructure for Wi-Fi LAN segments.
 //   0.0.22 - endorsements and manual GPS for hubs/infrastructure.
+//   1.0.2 - GET /sniff (+ /api/sniff) for MeshSniff LAN discovery.
 
 package server
 
@@ -43,12 +44,13 @@ var browserUpgrader = websocket.Upgrader{
 
 // Config configures the Monitor HTTP server.
 type Config struct {
-	BindAddr string
-	StaticFS embed.FS
-	Auth     *auth.Store
-	Data     *datastore.Store
-	Hub      *hubclient.Client
-	SOS      *sosfeed.Store
+	BindAddr   string
+	StaticFS   embed.FS
+	Auth       *auth.Store
+	Data       *datastore.Store
+	Hub        *hubclient.Client
+	SOS        *sosfeed.Store
+	AppVersion string
 }
 
 // Server is QuakeMeshMonitor's HTTP and WebSocket front end.
@@ -68,6 +70,8 @@ func New(cfg Config) *Server {
 		browsers: make(map[chan hubclient.Event]struct{}),
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/sniff", s.handleSniff)
+	mux.HandleFunc("/api/sniff", s.handleSniff)
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/api/logout", s.handleLogout)
 	mux.HandleFunc("/api/change-password", s.handleChangePassword)

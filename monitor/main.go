@@ -4,6 +4,7 @@
 //   0.0.1 - Initial scaffold.
 //   0.0.4 - Phase 3: CLI flags wired into monitorapp.Monitor; HTTP
 //           dashboard on :8082 with admin auth and Hub event stream.
+//   1.0.2 - MeshSniff GET /sniff (+ /api/sniff) on the dashboard HTTP.
 
 // Command quakemeshmonitor is the web-based admin and monitoring
 // dashboard that runs alongside a QuakeMeshHub. All static assets are
@@ -47,9 +48,10 @@ func main() {
 	fmt.Printf("quakemeshmonitor %s\n", Version)
 
 	mon, err := monitorapp.New(monitorapp.Config{
-		BindAddr:  *bindAddr,
-		HubDBPath: dbPath,
-		HubWSURL:  *hubWS,
+		BindAddr:   *bindAddr,
+		HubDBPath:  dbPath,
+		HubWSURL:   *hubWS,
+		AppVersion: Version,
 	}, staticAssets)
 	if err != nil {
 		log.Fatalf("quakemeshmonitor: %v", err)

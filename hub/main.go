@@ -6,6 +6,7 @@
 //           engine and loopback management API until SIGINT/SIGTERM.
 //   0.0.6 - Phase 5: multi-hop OGM engine (no CLI changes).
 //   0.0.7 - Phase 6: DTN bundle TTL flag.
+//   1.0.2 - MeshSniff GET /sniff on heartbeat and management HTTP.
 
 // Command quakemeshhub is the stable-backbone binary: registry, routing,
 // NAT relay, and Hub-to-Hub sync. See "Project Names" in /plan.md.
@@ -29,6 +30,7 @@ import (
 
 func main() {
 	cfg := hubapp.DefaultConfig()
+	cfg.AppVersion = Version
 
 	var peers string
 	flag.StringVar(&cfg.IdentityPath, "identity", "quakemeshhub.identity", "path to this hub's Ed25519 seed file (created on first run)")

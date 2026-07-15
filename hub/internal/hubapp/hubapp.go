@@ -80,6 +80,8 @@ type Config struct {
 	// DiscoveryBind is the UDP bind for LAN multicast beacons (e.g.
 	// "0.0.0.0:47223"). Empty disables.
 	DiscoveryBind string
+	// AppVersion is advertised on GET /sniff (MeshSniff / LAN identity).
+	AppVersion string
 }
 
 // DefaultConfig returns sensible defaults for the tuning parameters.
@@ -195,21 +197,38 @@ func New(cfg Config) (*Hub, error) {
 		Handler:    events,
 	})
 
+	heartbeatPort, _ := portFromAddr(cfg.HeartbeatAddr)
+	ogmPort, _ := portFromAddr(cfg.OGMBindAddr)
+	mgmtPort, _ := portFromAddr(cfg.ManagementAddr)
+	discoveryPort, _ := portFromAddr(cfg.DiscoveryBind)
+
+	api.SetSniff(managementapi.SniffConfig{
+		MeshID:         id.NodeID.String(),
+		AppVersion:     cfg.AppVersion,
+		HeartbeatPort:  heartbeatPort,
+		ManagementPort: mgmtPort,
+		OGMPort:        ogmPort,
+		DiscoveryPort:  discoveryPort,
+	})
+
 	var heartbeat *nodeheartbeat.Server
 	if cfg.HeartbeatAddr != "" {
 		heartbeat = nodeheartbeat.New(nodeheartbeat.Config{
-			ListenAddr:  cfg.HeartbeatAddr,
-			Registry:    reg,
-			Notifier:    events,
-			SOSNotifier: api,
-			Segments:    segmentStore,
-			Trust:       trustStore,
-			LocalHub:    id.NodeID,
+			ListenAddr:     cfg.HeartbeatAddr,
+			Registry:       reg,
+			Notifier:       events,
+			SOSNotifier:    api,
+			Segments:       segmentStore,
+			Trust:          trustStore,
+			LocalHub:       id.NodeID,
+			AppVersion:     cfg.AppVersion,
+			HeartbeatPort:  heartbeatPort,
+			ManagementPort: mgmtPort,
+			OGMPort:        ogmPort,
+			DiscoveryPort:  discoveryPort,
 		})
 	}
 
-	heartbeatPort, _ := portFromAddr(cfg.HeartbeatAddr)
-	ogmPort, _ := portFromAddr(cfg.OGMBindAddr)
 	var discovery *landiscovery.Engine
 	if cfg.DiscoveryBind != "" && heartbeatPort > 0 && ogmPort > 0 {
 		discovery = landiscovery.New(landiscovery.Config{
