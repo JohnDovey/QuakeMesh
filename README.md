@@ -18,10 +18,27 @@ See also [/Philosophy.md](Philosophy.md) for why this project exists.
 
 ## Building
 
-Go modules are tied together with a workspace (`go.work`):
+Go modules are tied together with a workspace (`go.work`). The repo root is
+**not** a module, so `go build ./...` from the root fails. Build from inside a
+module, or pass module paths:
 
 ```sh
-go build ./...   # from repo root, or inside any of core/hub/monitor/sdk/go
+# binaries
+go build -C hub -o QuakeMeshHub .
+go build -C monitor -o QuakeMeshMonitor .
+
+# all packages in a module
+go build -C core ./...
+go build -C hub ./...
+go build -C monitor ./...
+go build -C sdk/go ./...
+```
+
+Run without producing a binary:
+
+```sh
+cd hub && go run . -db /tmp/quakemeshhub.db
+cd monitor && go run . -hub-db /tmp/quakemeshhub.db
 ```
 
 Android (`/android`) and the Kotlin SDK (`/sdk/kotlin`) each need the local
