@@ -14,6 +14,7 @@ package registry
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/JohnDovey/QuakeMesh/core/identity"
@@ -46,6 +47,9 @@ type Node struct {
 	Status    NodeStatus
 	LastLat   *float64
 	LastLon   *float64
+	Handle    string
+	HomeLat   *float64
+	HomeLon   *float64
 }
 
 // Route is a row from routing_table.
@@ -100,6 +104,29 @@ func (r *Registry) UpsertSeen(nodeID identity.NodeID, seenAt time.Time) (statusC
 		return false, err
 	}
 	return statusChanged, nil
+}
+
+// UpdateProfile stores the user's handle and/or static home coordinates.
+func (r *Registry) UpdateProfile(nodeID identity.NodeID, handle *string, homeLat, homeLon *float64) error {
+	if handle != nil {
+		trimmed := strings.TrimSpace(*handle)
+		var h sql.NullString
+		if trimmed != "" {
+			h = sql.NullString{String: trimmed, Valid: true}
+		}
+		if _, err := r.db.Exec(`UPDATE node_registry SET handle = ? WHERE node_id = ?`, h, nodeID[:]); err != nil {
+			return err
+		}
+	}
+	if homeLat != nil && homeLon != nil {
+		if _, err := r.db.Exec(
+			`UPDATE node_registry SET home_lat = ?, home_lon = ? WHERE node_id = ?`,
+			*homeLat, *homeLon, nodeID[:],
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateLocation stores the latest self-reported GPS fix for a node.
@@ -159,7 +186,7 @@ func (r *Registry) MarkStaleBefore(cutoff time.Time) ([]identity.NodeID, error) 
 
 // Nodes returns every row in node_registry.
 func (r *Registry) Nodes() ([]Node, error) {
-	rows, err := r.db.Query(`SELECT node_id, first_seen, last_seen, last_lat, last_lon, status FROM node_registry`)
+	rows, err := r.db.Query(`SELECT node_id, first_seen, last_seen, last_lat, last_lon, status, handle, home_lat, home_lon FROM node_registry`)
 	if err != nil {
 		return nil, err
 	}
@@ -169,9 +196,10 @@ func (r *Registry) Nodes() ([]Node, error) {
 	for rows.Next() {
 		var idBytes []byte
 		var firstSeenMs, lastSeenMs int64
-		var lat, lon sql.NullFloat64
+		var lat, lon, homeLat, homeLon sql.NullFloat64
+		var handle sql.NullString
 		var status string
-		if err := rows.Scan(&idBytes, &firstSeenMs, &lastSeenMs, &lat, &lon, &status); err != nil {
+		if err := rows.Scan(&idBytes, &firstSeenMs, &lastSeenMs, &lat, &lon, &status, &handle, &homeLat, &homeLon); err != nil {
 			return nil, err
 		}
 		var id identity.NodeID
@@ -189,6 +217,17 @@ func (r *Registry) Nodes() ([]Node, error) {
 		if lon.Valid {
 			v := lon.Float64
 			n.LastLon = &v
+		}
+		if handle.Valid {
+			n.Handle = handle.String
+		}
+		if homeLat.Valid {
+			v := homeLat.Float64
+			n.HomeLat = &v
+		}
+		if homeLon.Valid {
+			v := homeLon.Float64
+			n.HomeLon = &v
 		}
 		nodes = append(nodes, n)
 	}

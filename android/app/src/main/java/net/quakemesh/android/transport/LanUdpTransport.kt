@@ -12,6 +12,7 @@ import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
 import net.quakemesh.android.mesh.LanContextCollector
+import net.quakemesh.android.mesh.NodeProfile
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.net.MulticastSocket
@@ -26,6 +27,7 @@ class LanUdpTransport(
     private val context: Context,
     private val nodeIdHex: () -> String?,
     private val location: () -> Triple<Double, Double, Float>?,
+    private val profile: () -> NodeProfile.Profile,
     private val onHubDiscovered: (String) -> Unit,
     private val onFrame: (peerHex: String, frame: ByteArray) -> Unit,
 ) : Transport {
@@ -116,7 +118,7 @@ class LanUdpTransport(
                         onHubDiscovered(url)
                     } ?: LanBeacon.decodeNode(payload)?.let { node ->
                         net.quakemesh.android.mesh.MeshDiscovery.recordNode(
-                            peer, node.nodeId, node.lat, node.lon,
+                            peer, node.nodeId, node.handle, node.lat, node.lon,
                         )
                     }
                 } else {
@@ -132,11 +134,15 @@ class LanUdpTransport(
             val id = nodeIdHex()
             if (id != null) {
                 val loc = location()
+                val prof = profile()
                 val lan = LanContextCollector.collect(context)?.let {
                     LanBeacon.LanContext(it.gatewayIp, it.localIp, it.ssid, it.bssid)
                 }
                 val payload = LanBeacon.encodeNode(
                     id,
+                    prof.handle,
+                    prof.homeLat,
+                    prof.homeLon,
                     loc?.first,
                     loc?.second,
                     loc?.third?.toDouble(),

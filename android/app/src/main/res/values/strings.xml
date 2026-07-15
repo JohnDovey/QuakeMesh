@@ -9,8 +9,13 @@
     <string name="stop_mesh">Stop mesh</string>
     <string name="mesh_stopped">Mesh stopped</string>
     <string name="mesh_starting">Starting mesh…</string>
-    <string name="node_id_label">Node ID: %1$s</string>
+    <string name="node_id_label">Node: %1$s</string>
     <string name="node_id_unknown">(start mesh)</string>
+    <string name="profile_section_title">Your profile</string>
+    <string name="node_handle_hint">Handle / nickname</string>
+    <string name="home_location_hint">Home location (info only — not live GPS)</string>
+    <string name="home_lat_hint">Home latitude</string>
+    <string name="home_lon_hint">Home longitude</string>
     <string name="hub_heartbeat_hint">Hub URL override (optional — auto-discovered on Wi‑Fi)</string>
     <string name="sos_button">SOS</string>
     <string name="sos_mesh_required">Start the mesh before sending SOS.</string>

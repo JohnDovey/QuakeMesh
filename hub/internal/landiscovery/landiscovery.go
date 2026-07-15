@@ -223,6 +223,12 @@ func (e *Engine) handleNodeBeacon(msg lanbeacon.Message) {
 		log.Printf("landiscovery: register node %s: %v", msg.NodeID, err)
 		return
 	}
+	handle := msg.Handle
+	var handlePtr *string
+	if handle != "" {
+		handlePtr = &handle
+	}
+	_ = e.cfg.Registry.UpdateProfile(nodeID, handlePtr, msg.HomeLat, msg.HomeLon)
 	if msg.LanContext != nil && e.cfg.Segments != nil {
 		_ = e.cfg.Segments.RecordMembership(lansegments.EntityNode, nodeID, *msg.LanContext, time.Now())
 	}

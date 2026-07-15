@@ -36,6 +36,29 @@ function shortId(id) {
   return id.slice(0, 8) + '…';
 }
 
+function nodeLabel(n) {
+  const id = typeof n === 'string' ? shortId(n) : shortId(n.node_id);
+  const handle = typeof n === 'string' ? '' : (n.handle || '').trim();
+  if (handle) return `${handle} (${id})`;
+  return id;
+}
+
+function nodeById(id) {
+  return nodes.find((x) => x.node_id === id);
+}
+
+function nodePopupLines(n) {
+  const lines = [`<strong>${nodeLabel(n)}</strong>`, `Status: ${n.status}`];
+  if (n.handle) lines.push(`Handle: ${n.handle}`);
+  if (n.home_lat != null && n.home_lon != null) {
+    lines.push(`Home: ${n.home_lat.toFixed(5)}, ${n.home_lon.toFixed(5)}`);
+  }
+  if (n.lat != null && n.lon != null) {
+    lines.push(`Live GPS: ${n.lat.toFixed(5)}, ${n.lon.toFixed(5)}`);
+  }
+  return lines.join('<br>');
+}
+
 const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',

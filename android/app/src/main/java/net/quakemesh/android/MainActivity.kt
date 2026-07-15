@@ -30,6 +30,8 @@ import net.quakemesh.meshapps.PrivateChatActivity
 import net.quakemesh.meshapps.R as MeshAppsR
 import net.quakemesh.android.mesh.MeshDiscovery
 import net.quakemesh.android.mesh.MeshEngine
+import net.quakemesh.android.mesh.NodeDisplay
+import net.quakemesh.android.mesh.NodeProfile
 import net.quakemesh.android.mesh.SosBeacon
 import net.quakemesh.android.ui.PeersAdapter
 import kotlin.concurrent.thread
@@ -43,6 +45,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toggleButton: Button
     private lateinit var sosButton: Button
     private lateinit var hubUrlField: EditText
+    private lateinit var handleField: EditText
+    private lateinit var homeLatField: EditText
+    private lateinit var homeLonField: EditText
     private lateinit var peersList: RecyclerView
     private lateinit var peersEmpty: TextView
     private val peersAdapter = PeersAdapter(
@@ -78,6 +83,9 @@ class MainActivity : AppCompatActivity() {
         toggleButton = findViewById(R.id.toggle_mesh_button)
         sosButton = findViewById(R.id.sos_demo_button)
         hubUrlField = findViewById(R.id.hub_heartbeat_url)
+        handleField = findViewById(R.id.node_handle)
+        homeLatField = findViewById(R.id.home_lat)
+        homeLonField = findViewById(R.id.home_lon)
         peersList = findViewById(R.id.peers_list)
         peersEmpty = findViewById(R.id.peers_empty)
 
@@ -93,6 +101,14 @@ class MainActivity : AppCompatActivity() {
 
         versionView.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
         hubUrlField.setText(prefs.getString(PREF_HUB_URL, ""))
+        handleField.setText(prefs.getString(NodeProfile.PREF_HANDLE, ""))
+        homeLatField.setText(prefs.getString(NodeProfile.PREF_HOME_LAT, ""))
+        homeLonField.setText(prefs.getString(NodeProfile.PREF_HOME_LON, ""))
+        listOf(handleField, homeLatField, homeLonField).forEach { field ->
+            field.setOnFocusChangeListener { _, hasFocus ->
+                if (!hasFocus) saveProfile()
+            }
+        }
 
         peersList.layoutManager = LinearLayoutManager(this)
         peersList.adapter = peersAdapter
@@ -108,6 +124,7 @@ class MainActivity : AppCompatActivity() {
                 refreshUi()
             } else {
                 requestPermissionsIfNeeded()
+                saveProfile()
                 val hubUrl = hubUrlField.text.toString().trim()
                 prefs.edit().putString(PREF_HUB_URL, hubUrl).apply()
                 MeshEngine.prepareStart(hubUrl)
@@ -220,11 +237,23 @@ class MainActivity : AppCompatActivity() {
         return perms
     }
 
+    private fun saveProfile() {
+        val handle = handleField.text.toString().trim().ifEmpty { null }
+        val homeLat = homeLatField.text.toString().trim().toDoubleOrNull()
+        val homeLon = homeLonField.text.toString().trim().toDoubleOrNull()
+        NodeProfile.save(this, handle, homeLat, homeLon)
+    }
+
     private fun refreshUi() {
-        nodeIdView.text = getString(
-            R.string.node_id_label,
-            MeshEngine.nodeId()?.take(16) ?: getString(R.string.node_id_unknown),
-        )
+        val nodeId = MeshEngine.nodeId()
+        nodeIdView.text = if (nodeId != null) {
+            getString(
+                R.string.node_id_label,
+                NodeDisplay.label(handleField.text.toString().trim().ifEmpty { null }, nodeId),
+            )
+        } else {
+            getString(R.string.node_id_unknown)
+        }
         toggleButton.text = if (meshRunning) {
             getString(R.string.stop_mesh)
         } else {

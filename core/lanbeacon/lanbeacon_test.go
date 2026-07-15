@@ -36,7 +36,7 @@ func TestDecodeIgnoresNonBeacon(t *testing.T) {
 
 func TestNodeBeaconLocation(t *testing.T) {
 	lat, lon, acc := -36.85, 174.76, 12.0
-	raw, err := NodeBeacon("deadbeef", &lat, &lon, &acc, nil)
+	raw, err := NodeBeacon("deadbeef", "", nil, nil, &lat, &lon, &acc, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

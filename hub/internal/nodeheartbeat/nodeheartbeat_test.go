@@ -79,6 +79,68 @@ func TestServer_HeartbeatRegistersNode(t *testing.T) {
 	_ = time.Now()
 }
 
+func TestServer_HeartbeatStoresHandleAndHome(t *testing.T) {
+	db, err := storage.Open(filepath.Join(t.TempDir(), "hub.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	reg := registry.New(db)
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Registry:   reg,
+		Notifier:   &recordingNotifier{},
+	})
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { srv.Close() })
+
+	var nodeID identity.NodeID
+	nodeID[9] = 0xcd
+	homeLat, homeLon := -36.9, 174.7
+	body, _ := json.Marshal(map[string]any{
+		"node_id":   nodeID.String(),
+		"handle":    "Alice",
+		"home_lat":  homeLat,
+		"home_lon":  homeLon,
+	})
+	base := "http://" + srv.Addr().String()
+	rec, err := http.Post(base+"/v1/heartbeat", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.Body.Close()
+	if rec.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", rec.StatusCode)
+	}
+	nodes, err := reg.Nodes()
+	if err != nil || len(nodes) != 1 {
+		t.Fatalf("nodes = %v, %v", nodes, err)
+	}
+	if nodes[0].Handle != "Alice" {
+		t.Fatalf("handle = %q", nodes[0].Handle)
+	}
+	if nodes[0].HomeLat == nil || *nodes[0].HomeLat != homeLat {
+		t.Fatalf("home_lat = %v", nodes[0].HomeLat)
+	}
+
+	body2, _ := json.Marshal(map[string]any{
+		"node_id": nodeID.String(),
+		"handle":  "Bob",
+	})
+	rec2, err := http.Post(base+"/v1/heartbeat", "application/json", bytes.NewReader(body2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec2.Body.Close()
+	nodes, _ = reg.Nodes()
+	if nodes[0].Handle != "Bob" {
+		t.Fatalf("updated handle = %q", nodes[0].Handle)
+	}
+}
+
 func TestServer_HeartbeatLanContextUpsertsSegment(t *testing.T) {
 	db, err := storage.Open(filepath.Join(t.TempDir(), "hub.db"))
 	if err != nil {

@@ -39,14 +39,17 @@ const (
 
 // Message is a presence beacon payload.
 type Message struct {
-	V             int      `json:"v"`
-	Kind          string   `json:"kind"`
-	NodeID        string   `json:"node_id"`
-	HeartbeatPort int      `json:"heartbeat_port,omitempty"`
-	OGMPort       int      `json:"ogm_port,omitempty"`
-	Lat           *float64           `json:"lat,omitempty"`
-	Lon           *float64           `json:"lon,omitempty"`
-	AccuracyM     *float64           `json:"accuracy_m,omitempty"`
+	V             int                 `json:"v"`
+	Kind          string              `json:"kind"`
+	NodeID        string              `json:"node_id"`
+	Handle        string              `json:"handle,omitempty"`
+	HomeLat       *float64            `json:"home_lat,omitempty"`
+	HomeLon       *float64            `json:"home_lon,omitempty"`
+	HeartbeatPort int                 `json:"heartbeat_port,omitempty"`
+	OGMPort       int                 `json:"ogm_port,omitempty"`
+	Lat           *float64            `json:"lat,omitempty"`
+	Lon           *float64            `json:"lon,omitempty"`
+	AccuracyM     *float64            `json:"accuracy_m,omitempty"`
 	LanContext    *lancontext.Context `json:"lan_context,omitempty"`
 }
 
@@ -110,11 +113,14 @@ func HubBeacon(nodeID string, heartbeatPort, ogmPort int, lan *lancontext.Contex
 }
 
 // NodeBeacon builds a node announcement.
-func NodeBeacon(nodeID string, lat, lon, accuracyM *float64, lan *lancontext.Context) ([]byte, error) {
+func NodeBeacon(nodeID string, handle string, homeLat, homeLon, lat, lon, accuracyM *float64, lan *lancontext.Context) ([]byte, error) {
 	return Encode(Message{
 		V:          1,
 		Kind:       KindNode,
 		NodeID:     nodeID,
+		Handle:     handle,
+		HomeLat:    homeLat,
+		HomeLon:    homeLon,
 		Lat:        lat,
 		Lon:        lon,
 		AccuracyM:  accuracyM,

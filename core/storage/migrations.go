@@ -12,6 +12,7 @@
 //   0.0.19 - migration4: lan_segments and lan_segment_members for
 //           Wi-Fi infrastructure view in Monitor.
 //   0.0.22 - migration5: manual GPS pins for hubs and LAN segments.
+//   1.0.1 - migration6: node handle and home location on node_registry.
 
 package storage
 
@@ -24,6 +25,7 @@ var Migrations = []Migration{
 	{Version: 3, SQL: migration3},
 	{Version: 4, SQL: migration4},
 	{Version: 5, SQL: migration5},
+	{Version: 6, SQL: migration6},
 }
 
 // migration1 creates every table listed in "Storage - SQLite Everywhere"
@@ -208,4 +210,11 @@ ALTER TABLE hub_registry ADD COLUMN manual_lat REAL;
 ALTER TABLE hub_registry ADD COLUMN manual_lon REAL;
 ALTER TABLE lan_segments ADD COLUMN manual_lat REAL;
 ALTER TABLE lan_segments ADD COLUMN manual_lon REAL;
+`
+
+// migration6 adds optional user handle and static home location per mesh node.
+const migration6 = `
+ALTER TABLE node_registry ADD COLUMN handle TEXT;
+ALTER TABLE node_registry ADD COLUMN home_lat REAL;
+ALTER TABLE node_registry ADD COLUMN home_lon REAL;
 `

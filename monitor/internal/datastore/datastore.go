@@ -11,6 +11,7 @@
 //   0.0.13 - Ban list proposals, verdicts, and local enforcement status.
 //   0.0.19 - LAN infrastructure segments for Wi-Fi gateway view.
 //   0.0.25 - Hubs(): close hub_registry rows before nested trust/config queries.
+//   1.0.1 - node handle and home location on /api/nodes.
 
 // Package datastore provides Monitor-facing access to the Hub's SQLite
 // registry (node_registry, hub_registry, routing_table, relay_hubs,
@@ -49,6 +50,9 @@ func New(db *storage.DB) *Store {
 // Node is a dashboard view of node_registry.
 type Node struct {
 	NodeID    string    `json:"node_id"`
+	Handle    string    `json:"handle,omitempty"`
+	HomeLat   *float64  `json:"home_lat,omitempty"`
+	HomeLon   *float64  `json:"home_lon,omitempty"`
 	Status    string    `json:"status"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
@@ -172,7 +176,7 @@ type InfrastructureSegment struct {
 // Nodes returns mesh nodes, excluding backbone hubs in hub_registry.
 func (s *Store) Nodes() ([]Node, error) {
 	rows, err := s.db.Query(`
-		SELECT node_id, first_seen, last_seen, last_lat, last_lon, status
+		SELECT node_id, first_seen, last_seen, last_lat, last_lon, status, handle, home_lat, home_lon
 		FROM node_registry
 		WHERE node_id NOT IN (SELECT hub_id FROM hub_registry)
 		ORDER BY last_seen DESC`)
@@ -185,9 +189,10 @@ func (s *Store) Nodes() ([]Node, error) {
 	for rows.Next() {
 		var idBytes []byte
 		var firstMs, lastMs int64
-		var lat, lon sql.NullFloat64
+		var lat, lon, homeLat, homeLon sql.NullFloat64
+		var handle sql.NullString
 		var status string
-		if err := rows.Scan(&idBytes, &firstMs, &lastMs, &lat, &lon, &status); err != nil {
+		if err := rows.Scan(&idBytes, &firstMs, &lastMs, &lat, &lon, &status, &handle, &homeLat, &homeLon); err != nil {
 			return nil, err
 		}
 		var id identity.NodeID
@@ -205,6 +210,17 @@ func (s *Store) Nodes() ([]Node, error) {
 		if lon.Valid {
 			v := lon.Float64
 			n.Lon = &v
+		}
+		if handle.Valid {
+			n.Handle = handle.String
+		}
+		if homeLat.Valid {
+			v := homeLat.Float64
+			n.HomeLat = &v
+		}
+		if homeLon.Valid {
+			v := homeLon.Float64
+			n.HomeLon = &v
 		}
 		nodes = append(nodes, n)
 	}

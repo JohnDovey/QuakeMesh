@@ -15,6 +15,7 @@ object MeshDiscovery {
         val kind: Kind,
         val address: String,
         val nodeId: String,
+        val handle: String?,
         val heartbeatUrl: String?,
         val lat: Double?,
         val lon: Double?,
@@ -38,6 +39,7 @@ object MeshDiscovery {
             kind = Kind.HUB,
             address = address,
             nodeId = nodeId,
+            handle = null,
             heartbeatUrl = heartbeatUrl,
             lat = null,
             lon = null,
@@ -46,13 +48,14 @@ object MeshDiscovery {
         listener?.invoke()
     }
 
-    fun recordNode(address: String, nodeId: String, lat: Double?, lon: Double?) {
+    fun recordNode(address: String, nodeId: String, handle: String?, lat: Double?, lon: Double?) {
         if (nodeId == localNodeId) return
         val now = System.currentTimeMillis()
         peers["${Kind.NODE.name}:$address:$nodeId"] = Peer(
             kind = Kind.NODE,
             address = address,
             nodeId = nodeId,
+            handle = handle,
             heartbeatUrl = null,
             lat = lat,
             lon = lon,

@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView
 import net.quakemesh.android.R
 import net.quakemesh.android.mesh.EndorsePeer
 import net.quakemesh.android.mesh.MeshDiscovery
+import net.quakemesh.android.mesh.NodeDisplay
 import java.text.DateFormat
 import java.util.Date
 
@@ -59,11 +60,11 @@ class PeersAdapter(
                 MeshDiscovery.Kind.HUB -> itemView.context.getString(R.string.peer_kind_hub, peer.address)
                 MeshDiscovery.Kind.NODE -> itemView.context.getString(R.string.peer_kind_node, peer.address)
             }
-            val idShort = peer.nodeId.take(16) + if (peer.nodeId.length > 16) "…" else ""
+            val idLabel = NodeDisplay.label(peer.handle, peer.nodeId)
             detailView.text = when (peer.kind) {
                 MeshDiscovery.Kind.HUB -> itemView.context.getString(
                     R.string.peer_hub_detail,
-                    idShort,
+                    idLabel,
                     peer.heartbeatUrl ?: "",
                 )
                 MeshDiscovery.Kind.NODE -> {
@@ -72,7 +73,7 @@ class PeersAdapter(
                     } else {
                         ""
                     }
-                    itemView.context.getString(R.string.peer_node_detail, idShort, loc)
+                    itemView.context.getString(R.string.peer_node_detail, idLabel, loc)
                 }
             }
             seenView.text = itemView.context.getString(
@@ -102,9 +103,9 @@ class PeersAdapter(
             onStatus: (String) -> Unit,
         ) {
             val context = itemView.context
-            val idShort = peer.nodeId.take(16) + if (peer.nodeId.length > 16) "…" else ""
+            val idLabel = NodeDisplay.label(peer.handle, peer.nodeId)
             AlertDialog.Builder(context)
-                .setTitle(context.getString(R.string.peer_actions_title, idShort))
+                .setTitle(context.getString(R.string.peer_actions_title, idLabel))
                 .setMessage(context.getString(R.string.peer_endorse_confirm))
                 .setPositiveButton(R.string.peer_endorse) { _, _ ->
                     val self = localNodeId()

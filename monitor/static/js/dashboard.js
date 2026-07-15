@@ -10,6 +10,7 @@ let routes = [];
 let infrastructure = [];
 let infraMapMarkers = {};
 let hubMapMarkers = {};
+let homeMapMarkers = {};
 let graphNetwork = null;
 let hopChart = null;
 let fallbackEnabled = false;
@@ -175,7 +176,7 @@ function renderNodesTable() {
     const cls = n.status === 'online' ? 'status-online' : 'status-stale';
     const score = trustByNode[n.node_id]?.total;
     const trustLabel = score != null ? ` · trust ${score}` : '';
-    tr.innerHTML = `<td title="${n.node_id}">${shortId(n.node_id)}</td>
+    tr.innerHTML = `<td title="${n.node_id}">${nodeLabel(n)}</td>
       <td class="${cls}">${n.status}${trustLabel}</td>
       <td>${formatDateTime(n.last_seen)}</td>`;
     tbody.appendChild(tr);
@@ -212,17 +213,15 @@ function refreshMapMarkers() {
           weight: 1,
           fillOpacity: 0.85,
         }).addTo(map)
-          .bindPopup(`<strong>${shortId(n.node_id)}</strong><br>${n.status}<br>Trust: ${score}`);
+          .bindPopup(nodePopupLines(n));
       } else {
         markers[n.node_id].setLatLng([n.lat, n.lon]);
         markers[n.node_id].setStyle({ fillColor: trustColor(score) });
-        markers[n.node_id].setPopupContent(
-          `<strong>${shortId(n.node_id)}</strong><br>${n.status}<br>Trust: ${score}`,
-        );
+        markers[n.node_id].setPopupContent(nodePopupLines(n));
       }
     } else {
       const li = document.createElement('li');
-      li.innerHTML = `${shortId(n.node_id)} — ${n.status} — <span class="${trustClass(score)}">trust ${score}</span>`;
+      li.innerHTML = `${nodeLabel(n)} — ${n.status} — <span class="${trustClass(score)}">trust ${score}</span>`;
       noGps.appendChild(li);
     }
   }
@@ -235,6 +234,7 @@ function refreshMapMarkers() {
   refreshOrphanMap();
   refreshInfrastructureMap();
   refreshHubMapMarkers();
+  refreshHomeMapMarkers();
   fitMapToVisibleMarkers();
 }
 
@@ -243,6 +243,7 @@ function fitMapToVisibleMarkers() {
   const points = [];
   for (const n of nodes) {
     if (n.lat != null && n.lon != null) points.push([n.lat, n.lon]);
+    if (n.home_lat != null && n.home_lon != null) points.push([n.home_lat, n.home_lon]);
   }
   for (const h of hubs) {
     if (h.lat != null && h.lon != null) points.push([h.lat, h.lon]);
@@ -288,7 +289,7 @@ function renderOrphanList() {
     const dist = h.distance_m > 0 ? formatDistance(h.distance_m) : '—';
     let detail = `${formatDateTime(h.last_seen)} · ${h.confidence} · ${h.age_label}`;
     if (h.proximity_note) detail += ` · ${h.proximity_note}`;
-    li.innerHTML = `<strong>${shortId(h.node_id)}</strong> — ${bearing} / ${dist}<br>`
+    li.innerHTML = `<strong>${nodeLabel(nodeById(h.node_id) || { node_id: h.node_id })}</strong> — ${bearing} / ${dist}<br>`
       + `<span class="status-stale">${detail}</span>`;
     list.appendChild(li);
   }
@@ -302,7 +303,7 @@ function refreshOrphanMap() {
   let refDrawn = false;
   for (const h of orphanHints) {
     if (h.last_lat == null || h.last_lon == null) continue;
-    const popup = `<strong>${shortId(h.node_id)}</strong> (stale)<br>`
+    const popup = `<strong>${nodeLabel(nodeById(h.node_id) || { node_id: h.node_id })}</strong> (stale)<br>`
       + `${formatBearing(h.bearing_deg)} · ${formatDistance(h.distance_m)}<br>`
       + `${h.confidence} · ${h.age_label}`;
     const marker = L.circleMarker([h.last_lat, h.last_lon], {
@@ -412,7 +413,7 @@ function renderTrustTable() {
   for (const s of rows) {
     const tr = document.createElement('tr');
     const cls = s.status === 'online' ? 'status-online' : 'status-stale';
-    tr.innerHTML = `<td title="${s.node_id}">${shortId(s.node_id)}</td>
+    tr.innerHTML = `<td title="${s.node_id}">${nodeLabel(nodeById(s.node_id) || { node_id: s.node_id })}</td>
       <td class="${cls}">${s.status}</td>
       <td class="${trustClass(s.total)}">${s.total}</td>
       <td>${s.longevity}</td>
@@ -557,6 +558,35 @@ async function saveInfraLocation(segmentID) {
   await loadInfrastructure();
 }
 
+function refreshHomeMapMarkers() {
+  if (!map) return;
+  const active = new Set();
+  for (const n of nodes) {
+    if (n.home_lat == null || n.home_lon == null) continue;
+    active.add(n.node_id);
+    const popup = `${nodePopupLines(n)}<br><em>Home location (info)</em>`;
+    if (!homeMapMarkers[n.node_id]) {
+      homeMapMarkers[n.node_id] = L.circleMarker([n.home_lat, n.home_lon], {
+        radius: 7,
+        color: '#f0b429',
+        fillColor: '#f0b429',
+        fillOpacity: 0.35,
+        weight: 2,
+        dashArray: '4 3',
+      }).addTo(map).bindPopup(popup);
+    } else {
+      homeMapMarkers[n.node_id].setLatLng([n.home_lat, n.home_lon]);
+      homeMapMarkers[n.node_id].setPopupContent(popup);
+    }
+  }
+  for (const id of Object.keys(homeMapMarkers)) {
+    if (!active.has(id)) {
+      map.removeLayer(homeMapMarkers[id]);
+      delete homeMapMarkers[id];
+    }
+  }
+}
+
 function refreshHubMapMarkers() {
   if (!map) return;
   const active = new Set();
@@ -639,13 +669,17 @@ function graphNodeForId(id) {
   if (n) {
     const score = trustByNode[n.node_id]?.total ?? 0;
     const fill = trustColor(score);
+    const homeNote = (n.home_lat != null && n.home_lon != null)
+      ? `\nhome: ${n.home_lat.toFixed(5)}, ${n.home_lon.toFixed(5)}`
+      : '';
+    const handleNote = n.handle ? `\nhandle: ${n.handle}` : '';
     return {
       id: n.node_id,
-      label: shortId(n.node_id),
+      label: nodeLabel(n),
       shape: 'dot',
       size: 16,
       color: { background: fill, border: '#e7ecf1', highlight: { background: fill, border: '#fff' } },
-      title: `node · ${n.status} · trust ${score}`,
+      title: `node · ${n.status} · trust ${score}${handleNote}${homeNote}`,
       group: 'node',
     };
   }
@@ -864,7 +898,7 @@ async function loadSosAlerts() {
       ? `${a.lat?.toFixed?.(5) ?? a.lat}, ${a.lon?.toFixed?.(5) ?? a.lon}${a.accuracy_m ? ` (±${Math.round(a.accuracy_m)} m)` : ''}`
       : '—';
     const text = a.text || a.raw_payload || '—';
-    tr.innerHTML = `<td>${formatDateTime(a.received_at)}</td><td>${shortId(a.node_id)}</td>
+    tr.innerHTML = `<td>${formatDateTime(a.received_at)}</td><td>${nodeLabel(nodeById(a.node_id) || { node_id: a.node_id })}</td>
       <td>${text}</td><td>${loc}</td>`;
     tbody.appendChild(tr);
   }

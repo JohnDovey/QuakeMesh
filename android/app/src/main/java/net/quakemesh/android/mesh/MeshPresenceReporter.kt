@@ -4,6 +4,7 @@
 //   0.0.17 - POST periodic heartbeats to QuakeMeshHub for Monitor visibility.
 //   0.0.19 - optional lan_context on heartbeat for infrastructure segments.
 //   0.0.25 - Join worker thread on stop for restart-safe lifecycle.
+//   1.0.1 - handle and home location on heartbeat.
 
 package net.quakemesh.android.mesh
 
@@ -24,6 +25,7 @@ class MeshPresenceReporter(
     private val nodeIdHex: String,
     private val hubBaseUrl: String,
     private val location: () -> LocationReporter.LocationFix?,
+    private val profile: () -> NodeProfile.Profile,
 ) {
     private var running = false
     private var worker: Thread? = null
@@ -60,6 +62,12 @@ class MeshPresenceReporter(
         val url = URL("$base/v1/heartbeat")
         try {
             val body = JSONObject().put("node_id", nodeIdHex)
+            val prof = profile()
+            body.put("handle", prof.handle ?: "")
+            if (prof.homeLat != null && prof.homeLon != null) {
+                body.put("home_lat", prof.homeLat)
+                    .put("home_lon", prof.homeLon)
+            }
             location()?.let { fix ->
                 body.put("lat", fix.lat)
                     .put("lon", fix.lon)

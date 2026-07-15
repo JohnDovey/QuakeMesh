@@ -114,6 +114,9 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		NodeID     string              `json:"node_id"`
+		Handle     *string             `json:"handle"`
+		HomeLat    *float64            `json:"home_lat"`
+		HomeLon    *float64            `json:"home_lon"`
 		Lat        *float64            `json:"lat"`
 		Lon        *float64            `json:"lon"`
 		AccuracyM  *float64            `json:"accuracy_m"`
@@ -136,6 +139,9 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "registry failed", http.StatusInternalServerError)
 		return
+	}
+	if body.Handle != nil || body.HomeLat != nil || body.HomeLon != nil {
+		_ = s.cfg.Registry.UpdateProfile(nodeID, body.Handle, body.HomeLat, body.HomeLon)
 	}
 	if body.LanContext != nil && s.cfg.Segments != nil {
 		ctx := *body.LanContext

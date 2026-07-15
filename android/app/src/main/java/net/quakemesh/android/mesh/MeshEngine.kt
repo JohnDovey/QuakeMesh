@@ -73,6 +73,7 @@ object MeshEngine {
                 location = {
                     locationReporter?.latestFix()?.let { Triple(it.lat, it.lon, it.accuracyM) }
                 },
+                profile = { NodeProfile.load(context.applicationContext) },
                 onHubDiscovered = { url -> onHubDiscovered(url) },
             ) { peer, frame -> n.onFrameReceived(peer, frame) }
             val ble = BleTransport(context) { peer, frame -> n.onFrameReceived(peer, frame) }
@@ -88,7 +89,7 @@ object MeshEngine {
                 else -> " (discovering hub on LAN…)"
             }
             isRunning = true
-            notifyStatus("Mesh running — node ${n.nodeId.take(12)}…$hubNote")
+            notifyStatus("Mesh running — ${NodeDisplay.label(NodeProfile.load(context.applicationContext).handle, n.nodeId)}$hubNote")
         }
     }
 
@@ -149,8 +150,10 @@ object MeshEngine {
         val ctx = appContext ?: return
         if (hubHeartbeatUrl.isBlank()) return
         presenceReporter?.stop()
-        presenceReporter = MeshPresenceReporter(ctx, n.nodeId, hubHeartbeatUrl) {
+        presenceReporter = MeshPresenceReporter(ctx, n.nodeId, hubHeartbeatUrl, {
             locationReporter?.latestFix()
-        }.also { it.start(sendImmediately = true) }
+        }, {
+            NodeProfile.load(ctx)
+        }).also { it.start(sendImmediately = true) }
     }
 }

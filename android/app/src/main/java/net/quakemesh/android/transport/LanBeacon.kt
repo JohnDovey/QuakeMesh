@@ -35,6 +35,9 @@ object LanBeacon {
 
     fun encodeNode(
         nodeId: String,
+        handle: String? = null,
+        homeLat: Double? = null,
+        homeLon: Double? = null,
         lat: Double?,
         lon: Double?,
         accuracyM: Double?,
@@ -44,6 +47,12 @@ object LanBeacon {
             .put("v", 1)
             .put("kind", KIND_NODE)
             .put("node_id", nodeId)
+        if (!handle.isNullOrBlank()) {
+            json.put("handle", handle.trim())
+        }
+        if (homeLat != null && homeLon != null) {
+            json.put("home_lat", homeLat).put("home_lon", homeLon)
+        }
         if (lat != null && lon != null) {
             json.put("lat", lat).put("lon", lon)
             if (accuracyM != null) {
@@ -88,6 +97,9 @@ object LanBeacon {
 
     data class NodeBeacon(
         val nodeId: String,
+        val handle: String?,
+        val homeLat: Double?,
+        val homeLon: Double?,
         val lat: Double?,
         val lon: Double?,
     )
@@ -98,8 +110,11 @@ object LanBeacon {
         if (json.optString("kind") != KIND_NODE) return null
         val nodeId = json.optString("node_id")
         if (nodeId.isBlank()) return null
+        val handle = json.optString("handle").takeIf { it.isNotBlank() }
+        val homeLat = if (json.has("home_lat")) json.optDouble("home_lat") else null
+        val homeLon = if (json.has("home_lon")) json.optDouble("home_lon") else null
         val lat = if (json.has("lat")) json.optDouble("lat") else null
         val lon = if (json.has("lon")) json.optDouble("lon") else null
-        return NodeBeacon(nodeId, lat, lon)
+        return NodeBeacon(nodeId, handle, homeLat, homeLon, lat, lon)
     }
 }
