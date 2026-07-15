@@ -16,9 +16,10 @@
 //   1.0.1 - Node handle and home location via heartbeat/discovery.
 //   1.0.2 - GET /sniff on heartbeat + management HTTP for MeshSniff.
 //   1.0.3 - VirtBBS-style boxed startup banner.
+//   1.0.4 - Show host IP on startup banner.
 
 package main
 
 // Version is QuakeMeshHub's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "1.0.3"
+const Version = "1.0.4"

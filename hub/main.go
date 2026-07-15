@@ -8,6 +8,7 @@
 //   0.0.7 - Phase 6: DTN bundle TTL flag.
 //   1.0.2 - MeshSniff GET /sniff on heartbeat and management HTTP.
 //   1.0.3 - VirtBBS-style boxed startup banner.
+//   1.0.4 - Show host IP on startup banner.
 
 // Command quakemeshhub is the stable-backbone binary: registry, routing,
 // NAT relay, and Hub-to-Hub sync. See "Project Names" in /plan.md.
@@ -26,6 +27,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/JohnDovey/QuakeMesh/core/lancontext"
 	"github.com/JohnDovey/QuakeMesh/hub/internal/hubapp"
 )
 
@@ -94,6 +96,7 @@ func printStartupBanner(cfg hubapp.Config, nodeID string) {
 	line("")
 	line(fmt.Sprintf("  QuakeMeshHub  v%s", Version))
 	line("  Private mesh backbone")
+	line(fmt.Sprintf("  Host IP      %s", hostIP()))
 	line("")
 	sep()
 	line("  IDENTITY")
@@ -130,6 +133,13 @@ func printStartupBanner(cfg hubapp.Config, nodeID string) {
 	line("")
 	fmt.Printf("╚═%s═╝\n", border)
 	fmt.Println()
+}
+
+func hostIP() string {
+	if ip := lancontext.DetectLocalIP(); ip != "" {
+		return ip
+	}
+	return "(unknown)"
 }
 
 func shortID(hex string) string {

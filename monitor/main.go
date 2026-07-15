@@ -6,6 +6,7 @@
 //           dashboard on :8082 with admin auth and Hub event stream.
 //   1.0.2 - MeshSniff GET /sniff (+ /api/sniff) on the dashboard HTTP.
 //   1.0.3 - VirtBBS-style boxed startup banner.
+//   1.0.4 - Show host IP on startup banner.
 
 // Command quakemeshmonitor is the web-based admin and monitoring
 // dashboard that runs alongside a QuakeMeshHub. All static assets are
@@ -23,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/JohnDovey/QuakeMesh/core/lancontext"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/hubdb"
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/monitorapp"
 )
@@ -91,6 +93,7 @@ func printStartupBanner(bindAddr, hubDB, hubWS string) {
 	line("")
 	line(fmt.Sprintf("  QuakeMeshMonitor  v%s", Version))
 	line("  Mesh admin dashboard")
+	line(fmt.Sprintf("  Host IP      %s", hostIP()))
 	line("")
 	sep()
 	line("  LISTENERS")
@@ -104,4 +107,11 @@ func printStartupBanner(bindAddr, hubDB, hubWS string) {
 	line("")
 	fmt.Printf("╚═%s═╝\n", border)
 	fmt.Println()
+}
+
+func hostIP() string {
+	if ip := lancontext.DetectLocalIP(); ip != "" {
+		return ip
+	}
+	return "(unknown)"
 }

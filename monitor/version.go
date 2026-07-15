@@ -19,9 +19,10 @@
 //   1.0.1 - Show node handles and home pins in dashboard/map.
 //   1.0.2 - GET /sniff (+ /api/sniff) for MeshSniff LAN discovery.
 //   1.0.3 - VirtBBS-style boxed startup banner.
+//   1.0.4 - Show host IP on startup banner.
 
 package main
 
 // Version is QuakeMeshMonitor's release version. Bumped on every commit
 // (patch), and on minor/major only when explicitly requested.
-const Version = "1.0.3"
+const Version = "1.0.4"
