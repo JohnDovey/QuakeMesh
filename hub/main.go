@@ -7,6 +7,7 @@
 //   0.0.6 - Phase 5: multi-hop OGM engine (no CLI changes).
 //   0.0.7 - Phase 6: DTN bundle TTL flag.
 //   1.0.2 - MeshSniff GET /sniff on heartbeat and management HTTP.
+//   1.0.3 - VirtBBS-style boxed startup banner.
 
 // Command quakemeshhub is the stable-backbone binary: registry, routing,
 // NAT relay, and Hub-to-Hub sync. See "Project Names" in /plan.md.
@@ -54,28 +55,15 @@ func main() {
 		}
 	}
 
-	fmt.Printf("quakemeshhub %s\n", Version)
-
 	hub, err := hubapp.New(cfg)
 	if err != nil {
 		log.Fatalf("quakemeshhub: %v", err)
 	}
-	fmt.Printf("node id: %s\n", hub.Identity.NodeID)
 
 	if err := hub.Start(); err != nil {
 		log.Fatalf("quakemeshhub: %v", err)
 	}
-	fmt.Printf("OGM engine listening on %s (peers: %v)\n", cfg.OGMBindAddr, cfg.Peers)
-	fmt.Printf("management API listening on %s\n", cfg.ManagementAddr)
-	if cfg.AppSocket != "" {
-		fmt.Printf("app SDK daemon listening on %s\n", cfg.AppSocket)
-	}
-	if cfg.DiscoveryBind != "" {
-		fmt.Printf("LAN discovery beacons on %s (multicast %s:%d)\n", cfg.DiscoveryBind, "239.255.42.99", 47223)
-	}
-	if cfg.HeartbeatAddr != "" {
-		fmt.Printf("node heartbeat API listening on %s\n", cfg.HeartbeatAddr)
-	}
+	printStartupBanner(cfg, hub.Identity.NodeID.String())
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -85,6 +73,70 @@ func main() {
 	if err := hub.Close(); err != nil {
 		log.Printf("quakemeshhub: shutdown: %v", err)
 	}
+}
+
+// printStartupBanner writes a VirtBBS-style boxed header with version,
+// node identity, listening endpoints, and storage paths.
+func printStartupBanner(cfg hubapp.Config, nodeID string) {
+	const w = 60
+	border := strings.Repeat("═", w)
+	pad := func(s string) string {
+		n := len([]rune(s))
+		if n >= w {
+			return string([]rune(s)[:w])
+		}
+		return s + strings.Repeat(" ", w-n)
+	}
+	line := func(s string) { fmt.Printf("║ %s ║\n", pad(s)) }
+	sep := func() { fmt.Printf("╠═%s═╣\n", border) }
+
+	fmt.Printf("╔═%s═╗\n", border)
+	line("")
+	line(fmt.Sprintf("  QuakeMeshHub  v%s", Version))
+	line("  Private mesh backbone")
+	line("")
+	sep()
+	line("  IDENTITY")
+	sep()
+	line(fmt.Sprintf("  Node ID      %s", shortID(nodeID)))
+	sep()
+	line("  LISTENERS")
+	sep()
+	line(fmt.Sprintf("  OGM          %s", cfg.OGMBindAddr))
+	line(fmt.Sprintf("  Management   %s", cfg.ManagementAddr))
+	if cfg.HeartbeatAddr != "" {
+		line(fmt.Sprintf("  Heartbeat    %s", cfg.HeartbeatAddr))
+	}
+	if cfg.DiscoveryBind != "" {
+		line(fmt.Sprintf("  Discovery    %s", cfg.DiscoveryBind))
+		line("               multicast 239.255.42.99:47223")
+	}
+	if cfg.AppSocket != "" {
+		line(fmt.Sprintf("  App SDK      %s", cfg.AppSocket))
+	}
+	if len(cfg.Peers) > 0 {
+		sep()
+		line("  PEERS")
+		sep()
+		for _, p := range cfg.Peers {
+			line(fmt.Sprintf("  %s", p))
+		}
+	}
+	sep()
+	line("  STORAGE")
+	sep()
+	line(fmt.Sprintf("  Database     %s", cfg.DBPath))
+	line(fmt.Sprintf("  Identity     %s", cfg.IdentityPath))
+	line("")
+	fmt.Printf("╚═%s═╝\n", border)
+	fmt.Println()
+}
+
+func shortID(hex string) string {
+	if len(hex) <= 24 {
+		return hex
+	}
+	return hex[:20] + "…"
 }
 
 // loopbackManagementAddr is the Hub's default local-only management API

@@ -5,6 +5,7 @@
 //   0.0.4 - Phase 3: CLI flags wired into monitorapp.Monitor; HTTP
 //           dashboard on :8082 with admin auth and Hub event stream.
 //   1.0.2 - MeshSniff GET /sniff (+ /api/sniff) on the dashboard HTTP.
+//   1.0.3 - VirtBBS-style boxed startup banner.
 
 // Command quakemeshmonitor is the web-based admin and monitoring
 // dashboard that runs alongside a QuakeMeshHub. All static assets are
@@ -19,6 +20,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/JohnDovey/QuakeMesh/monitor/internal/hubdb"
@@ -45,8 +47,6 @@ func main() {
 		log.Print(dbHint)
 	}
 
-	fmt.Printf("quakemeshmonitor %s\n", Version)
-
 	mon, err := monitorapp.New(monitorapp.Config{
 		BindAddr:   *bindAddr,
 		HubDBPath:  dbPath,
@@ -60,9 +60,7 @@ func main() {
 	if err := mon.Start(); err != nil {
 		log.Fatalf("quakemeshmonitor: %v", err)
 	}
-	fmt.Printf("dashboard listening on http://%s\n", mon.Addr())
-	fmt.Printf("reading hub registry from %s\n", dbPath)
-	fmt.Printf("subscribing to hub events at %s\n", *hubWS)
+	printStartupBanner(mon.Addr(), dbPath, *hubWS)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -72,4 +70,38 @@ func main() {
 	if err := mon.Close(); err != nil {
 		log.Printf("quakemeshmonitor: shutdown: %v", err)
 	}
+}
+
+// printStartupBanner writes a VirtBBS-style boxed header with version,
+// dashboard URL, and hub wiring.
+func printStartupBanner(bindAddr, hubDB, hubWS string) {
+	const w = 60
+	border := strings.Repeat("═", w)
+	pad := func(s string) string {
+		n := len([]rune(s))
+		if n >= w {
+			return string([]rune(s)[:w])
+		}
+		return s + strings.Repeat(" ", w-n)
+	}
+	line := func(s string) { fmt.Printf("║ %s ║\n", pad(s)) }
+	sep := func() { fmt.Printf("╠═%s═╣\n", border) }
+
+	fmt.Printf("╔═%s═╗\n", border)
+	line("")
+	line(fmt.Sprintf("  QuakeMeshMonitor  v%s", Version))
+	line("  Mesh admin dashboard")
+	line("")
+	sep()
+	line("  LISTENERS")
+	sep()
+	line(fmt.Sprintf("  Dashboard    http://%s", bindAddr))
+	sep()
+	line("  HUB")
+	sep()
+	line(fmt.Sprintf("  Database     %s", hubDB))
+	line(fmt.Sprintf("  Events       %s", hubWS))
+	line("")
+	fmt.Printf("╚═%s═╝\n", border)
+	fmt.Println()
 }
